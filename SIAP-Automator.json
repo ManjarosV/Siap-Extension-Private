@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         SIAP Automator - V11.2 (The Precise Striker)
+// @name         SIAP Automator - V12.0 (Two-Step Logic)
 // @namespace    http://tampermonkey.net/
-// @version      11.2.0
-// @description  Foco total na precisão do clique em checkboxes e rádio botões.
+// @version      12.0.0
+// @description  Dois passos: seleciona itens e depois gera texto coeso com a habilidade.
 // @match        https://siap.educacao.go.gov.br/*
 // @match        https://*.siap.com.br/*
 // @match        https://*.siapnet.com.br/*
@@ -18,330 +18,622 @@
 (function () {
     'use strict';
 
-    if (window.SiapAutomator && window.SiapAutomator.isInitialized) return;
-    window.SiapAutomator = { isInitialized: true };
+    if (window.SiapAutomatorV12 && window.SiapAutomatorV12.isInitialized) return;
+    window.SiapAutomatorV12 = { isInitialized: true };
 
-    // --- Estilização Moderna ---
-    GM_addStyle(`
-        :root {
-            --siap-bg: #121218; --siap-card: #1e1e26; --siap-accent: #3b82f6;
-            --siap-success: #10b981; --siap-error: #ef4444; --siap-warn: #f59e0b;
-            --siap-text: #f3f4f6; --siap-text-dim: #9ca3af; --siap-border: #334155;
-        }
-        #siap-sidebar {
-            position: fixed; top: 0; right: 0; width: 320px; height: 100vh;
-            background: var(--siap-bg) !important; color: var(--siap-text) !important;
-            z-index: 100000; display: flex; flex-direction: column;
-            font-family: 'Inter', 'Segoe UI', sans-serif !important;
-            box-shadow: -10px 0 30px rgba(0,0,0,0.5); border-left: 1px solid var(--siap-border) !important;
-        }
-        .siap-header {
-            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-            padding: 16px 20px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;
-        }
-        .siap-content { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
-        .siap-label { font-size: 11px; font-weight: 600; color: var(--siap-text-dim); text-transform: uppercase; margin-bottom: 2px; }
-        .siap-input, .siap-textarea {
-            width: 100% !important; padding: 10px !important; background: var(--siap-card) !important;
-            color: var(--siap-text) !important; border: 1px solid var(--siap-border) !important;
-            border-radius: 8px !important; font-size: 13px !important; box-sizing: border-box !important;
-        }
-        .siap-btn-group { display: flex; gap: 10px; margin-top: 5px; }
-        .siap-btn {
-            flex: 1; padding: 12px; border: none !important; border-radius: 8px !important;
-            cursor: pointer; font-weight: bold; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px;
-            transition: all 0.2s; color: white !important;
-        }
-        #siap-start { background: var(--siap-success) !important; }
-        #siap-stop { background: var(--siap-error) !important; }
-        #siap-config { background: transparent !important; border: none !important; color: white !important; cursor: pointer; font-size: 18px; }
-        #siap-log-output {
-            background: #09090b !important; padding: 12px !important; flex: 1; overflow-y: auto;
-            font-family: 'Consolas', monospace !important; font-size: 10px !important;
-            border-radius: 8px !important; border: 1px solid var(--siap-border) !important;
-        }
-        #siap-log-output p { margin: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
-    `);
+    console.log('[SIAP V12] Iniciando...');
 
-    // --- Lógica Original ---
-    const SETTINGS_KEY = 'siap_automator_settings';
-    const settings = GM_getValue(SETTINGS_KEY, {
+    // ── Estilos ──────────────────────────────────────────────────────────────
+    GM_addStyle([
+        ':root {',
+        '  --siap-bg:#121218; --siap-card:#1e1e26; --siap-accent:#3b82f6;',
+        '  --siap-success:#10b981; --siap-error:#ef4444; --siap-warn:#f59e0b;',
+        '  --siap-text:#f3f4f6; --siap-text-dim:#9ca3af; --siap-border:#334155;',
+        '}',
+        '#siap-sidebar {',
+        '  position:fixed; top:0; right:0; width:320px; height:100vh;',
+        '  background:var(--siap-bg) !important; color:var(--siap-text) !important;',
+        '  z-index:100000; display:flex; flex-direction:column;',
+        '  font-family:"Inter","Segoe UI",sans-serif !important;',
+        '  box-shadow:-10px 0 30px rgba(0,0,0,0.5);',
+        '  border-left:1px solid var(--siap-border) !important;',
+        '  transition:width 0.25s ease;',
+        '}',
+        '#siap-sidebar.siap-minimized {',
+        '  width:36px !important;',
+        '}',
+        '#siap-sidebar.siap-minimized .siap-content,',
+        '#siap-sidebar.siap-minimized .siap-header-info { display:none !important; }',
+        '#siap-sidebar.siap-minimized .siap-header {',
+        '  flex-direction:column; justify-content:flex-start; padding:10px 0; gap:14px; align-items:center;',
+        '}',
+        '#siap-sidebar.siap-minimized #siap-minimize { font-size:14px; }',
+        '#siap-sidebar.siap-minimized #siap-config { display:none !important; }',
+        '.siap-header {',
+        '  background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%);',
+        '  padding:12px 14px; font-weight:bold; display:flex; gap:8px;',
+        '  justify-content:space-between; align-items:center; flex-shrink:0;',
+        '}',
+        '.siap-header-info { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }',
+        '.siap-title { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
+        '.siap-meta { display:flex; align-items:center; gap:6px; }',
+        '.siap-plan-badge {',
+        '  font-size:9px; font-weight:700; padding:2px 7px; border-radius:20px;',
+        '  text-transform:uppercase; letter-spacing:0.5px;',
+        '}',
+        '.siap-plan-admin { background:#7c3aed; color:#fff; }',
+        '.siap-plan-basico { background:#059669; color:#fff; }',
+        '.siap-plan-padrao { background:#475569; color:#fff; }',
+        '.siap-online-dot {',
+        '  width:8px; height:8px; border-radius:50%; flex-shrink:0;',
+        '  background:#ef4444; transition:background 0.4s;',
+        '}',
+        '.siap-online-dot.online { background:#10b981; box-shadow:0 0 0 2px rgba(16,185,129,0.3); }',
+        '.siap-online-dot.online { animation:siap-pulse 2s infinite; }',
+        '@keyframes siap-pulse {',
+        '  0%,100% { box-shadow:0 0 0 2px rgba(16,185,129,0.3); }',
+        '  50%      { box-shadow:0 0 0 5px rgba(16,185,129,0.0); }',
+        '}',
+        '.siap-header-btns { display:flex; align-items:center; gap:6px; flex-shrink:0; }',
+        '#siap-minimize, #siap-config {',
+        '  background:transparent !important; border:none !important;',
+        '  color:rgba(255,255,255,0.8) !important; cursor:pointer;',
+        '  font-size:15px; padding:2px 4px; line-height:1;',
+        '}',
+        '#siap-minimize:hover, #siap-config:hover { color:#fff !important; }',
+        '.siap-content { padding:20px; flex:1; display:flex; flex-direction:column; gap:12px; overflow-y:auto; }',
+        '.siap-label { font-size:11px; font-weight:600; color:var(--siap-text-dim); text-transform:uppercase; margin-bottom:2px; }',
+        '.siap-input, .siap-textarea {',
+        '  width:100% !important; padding:10px !important; background:var(--siap-card) !important;',
+        '  color:var(--siap-text) !important; border:1px solid var(--siap-border) !important;',
+        '  border-radius:8px !important; font-size:13px !important; box-sizing:border-box !important;',
+        '}',
+        '.siap-btn-group { display:flex; gap:10px; margin-top:5px; }',
+        '.siap-btn {',
+        '  flex:1; padding:12px; border:none !important; border-radius:8px !important;',
+        '  cursor:pointer; font-weight:bold; font-size:13px;',
+        '  display:flex; align-items:center; justify-content:center; gap:8px;',
+        '  transition:all 0.2s; color:white !important;',
+        '}',
+        '#siap-start { background:var(--siap-success) !important; }',
+        '#siap-stop  { background:var(--siap-error) !important; }',
+        '#siap-log-output {',
+        '  background:#09090b !important; padding:12px !important; flex:1; overflow-y:auto;',
+        '  font-family:"Consolas",monospace !important; font-size:10px !important;',
+        '  border-radius:8px !important; border:1px solid var(--siap-border) !important;',
+        '}',
+        '#siap-log-output p { margin:2px 0; border-bottom:1px solid rgba(255,255,255,0.02); }',
+        '.siap-badge {',
+        '  display:inline-block; background:#3b82f6; color:white; border-radius:4px;',
+        '  padding:1px 6px; font-size:9px; font-weight:bold; margin-right:4px;',
+        '}'
+    ].join('\n'));
+
+    // ── Estado ───────────────────────────────────────────────────────────────
+    var SETTINGS_KEY = 'siap_automator_settings';
+    var settings = GM_getValue(SETTINGS_KEY, {
         webhookUrl: 'https://pc-do-gon.tailaa9b6a.ts.net/webhook/siap-automator',
         authToken: 'admingon1'
     });
 
-    const STORAGE_KEY = 'siap_automator_state';
-    let stopRequested = false;
+    var STORAGE_KEY = 'siap_automator_state';
+    var stopRequested = false;
+    var isRunning = false;
 
     function saveState(data) {
-        const existing = GM_getValue(STORAGE_KEY, {});
-        const merged = { ...existing, ...data, lastUpdate: Date.now() };
+        var existing = GM_getValue(STORAGE_KEY, {});
+        var merged = {};
+        for (var k in existing) merged[k] = existing[k];
+        for (var k in data) merged[k] = data[k];
+        merged.lastUpdate = Date.now();
         GM_setValue(STORAGE_KEY, merged);
     }
     function loadState() { return GM_getValue(STORAGE_KEY, {}); }
     function clearState() { GM_setValue(STORAGE_KEY, {}); }
 
-    const logToSidebar = (msg, type = 'info') => {
-        const el = document.getElementById('siap-log-output');
+    // ── Log ──────────────────────────────────────────────────────────────────
+    function logToSidebar(msg, type, step) {
+        type = type || 'info';
+        var el = document.getElementById('siap-log-output');
         if (!el) return;
-        const p = document.createElement('p');
-        const colors = { error: '#ff8888', warn: '#ffaa00', success: '#00ff88', info: '#00ccff' };
+        var p = document.createElement('p');
+        var colors = { error: '#ff8888', warn: '#ffaa00', success: '#00ff88', info: '#00ccff' };
         p.style.color = colors[type] || colors.info;
-        p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        var time = new Date().toLocaleTimeString();
+        var badge = step ? '<span class="siap-badge">P' + step + '</span>' : '';
+        p.innerHTML = '[' + time + '] ' + badge + msg;
         el.appendChild(p);
         el.scrollTop = el.scrollHeight;
-    };
+    }
 
-    const wait = (ms) => new Promise(r => setTimeout(r, ms));
-    const fireEvent = (target, eventName) => {
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+    function fireEvent(target, eventName) {
         try { target.dispatchEvent(new MouseEvent(eventName, { bubbles: true, cancelable: true })); } catch (_) {}
-    };
-    
-    const robustClick = async (el) => {
-        if (stopRequested) return;
-        
-        // Tenta achar o checkbox/input real dentro do elemento ou pai
-        let target = el.querySelector('input') || (el.tagName === 'INPUT' ? el : null);
-        if (!target) {
-            const parent = el.parentElement;
-            if (parent) target = parent.querySelector('input');
-        }
-        
-        const finalTarget = target || el;
+    }
+
+    function robustClick(el) {
+        if (stopRequested) return Promise.resolve();
+        var target = el.querySelector('input') || (el.tagName === 'INPUT' ? el : null);
+        if (!target && el.parentElement) target = el.parentElement.querySelector('input');
+        var finalTarget = target || el;
         finalTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // Destaque visual
-        const oldOutline = finalTarget.style.outline;
+        var oldOutline = finalTarget.style.outline;
         finalTarget.style.outline = '4px solid #a855f7';
-        await wait(600);
-        
-        ['mousedown', 'mouseup', 'click'].forEach(name => fireEvent(finalTarget, name));
-        if (finalTarget.tagName === 'INPUT') {
-            finalTarget.checked = true;
-            finalTarget.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        
-        await wait(400);
-        finalTarget.style.outline = oldOutline;
-    };
+        return wait(600).then(function() {
+            ['mousedown', 'mouseup', 'click'].forEach(function(name) { fireEvent(finalTarget, name); });
+            if (finalTarget.tagName === 'INPUT') {
+                finalTarget.checked = true;
+                finalTarget.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            return wait(400);
+        }).then(function() {
+            finalTarget.style.outline = oldOutline;
+        });
+    }
 
-    const typeIntoTextarea = async (el, text) => {
-        if (stopRequested) return;
+    function typeIntoTextarea(el, text) {
+        if (stopRequested) return Promise.resolve();
         el.focus();
-        await wait(400);
-        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-        if (nativeSetter) nativeSetter.call(el, text); else el.value = text;
-        ['input', 'change', 'blur'].forEach(name => el.dispatchEvent(new Event(name, { bubbles: true })));
-    };
-
-    const detectSecao = (text) => {
-        const t = text.toLowerCase();
-        if (t.includes('metodologia')) return 'metodologias';
-        if (t.includes('avalia')) return 'avaliacoes';
-        return null;
-    };
-    const getSectionHeaders = () => {
-        return Array.from(document.querySelectorAll('div, td, th, span, label, b, strong, h2, h3, h4, legend'))
-            .filter(el => { const t = el.textContent.trim(); return t.length > 3 && t.length < 80 && detectSecao(t) !== null && el.offsetParent !== null; })
-            .map(el => ({ el, secao: detectSecao(el.textContent.trim()), y: el.getBoundingClientRect().top + window.scrollY }))
-            .sort((a,b) => a.y - b.y);
-    };
-    const buildTextareaMap = () => {
-        const headers = getSectionHeaders();
-        const textareas = Array.from(document.querySelectorAll('textarea')).filter(ta => ta.offsetParent !== null)
-            .map(ta => ({ el: ta, y: ta.getBoundingClientRect().top + window.scrollY })).sort((a,b) => a.y - b.y);
-        const map = {};
-        for (const ta of textareas) {
-            let closest = null;
-            for (const h of headers) { if (h.y < ta.y) closest = h; else break; }
-            if (closest && !map[closest.secao]) map[closest.secao] = ta.el;
-        }
-        return map;
-    };
-
-    const getItemsFromDoc = (doc) => {
-        let items = [];
-        const containers = Array.from(doc.querySelectorAll('div[id*="Nodes"]'));
-        containers.forEach(container => {
-            Array.from(container.querySelectorAll('span, label, a'))
-                .map(el => ({ text: el.textContent.trim(), el }))
-                .filter(it => it.text.length > 5)
-                .forEach(it => items.push(it));
-        });
-        return items;
-    };
-
-    const collectItems = async () => {
-        logToSidebar('Buscando itens...', 'info');
-        await wait(2000); // Mais tempo para carregar categorias pesadas
-        let all = getItemsFromDoc(document);
-        document.querySelectorAll('iframe').forEach(iframe => {
-            try { const fd = iframe.contentDocument || iframe.contentWindow.document; all = [...all, ...getItemsFromDoc(fd)]; } catch(_) {}
-        });
-        const seen = new Set();
-        all = all.filter(it => { if(seen.has(it.text)) return false; seen.add(it.text); return true; });
-        all.forEach(it => (it.el.style.outline = '1px solid rgba(59,130,246,0.3)'));
-        logToSidebar(`${all.length} itens encontrados.`, 'success');
-        return all;
-    };
-
-    const callWebhook = (data) => {
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: "POST",
-                url: settings.webhookUrl,
-                data: JSON.stringify(data),
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${settings.authToken}` },
-                onload: (res) => { try { resolve(JSON.parse(res.responseText)); } catch (e) { reject(e); } },
-                onerror: (err) => reject(err)
+        return wait(400).then(function() {
+            var desc = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+            var nativeSetter = desc && desc.set;
+            if (nativeSetter) nativeSetter.call(el, text); else el.value = text;
+            ['input', 'change', 'blur'].forEach(function(name) {
+                el.dispatchEvent(new Event(name, { bubbles: true }));
             });
         });
-    };
+    }
 
-    const normalizeText = (text) => {
-        return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    };
+    function normalizeText(text) {
+        return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
 
-    let isRunning = false;
+    // ── Mapa de textareas ─────────────────────────────────────────────────────
+    function detectSecao(text) {
+        var t = text.toLowerCase();
+        if (t.indexOf('metodologia') !== -1) return 'metodologias';
+        if (t.indexOf('avalia') !== -1) return 'avaliacoes';
+        return null;
+    }
 
-    const runAutomation = async (isAutoStart = false) => {
+    function getSectionHeaders() {
+        var tags = ['div', 'td', 'th', 'span', 'label', 'b', 'strong', 'h2', 'h3', 'h4', 'legend'];
+        var els = [];
+        tags.forEach(function(tag) {
+            Array.from(document.querySelectorAll(tag)).forEach(function(el) {
+                var t = el.textContent.trim();
+                var sec = detectSecao(t);
+                if (t.length > 3 && t.length < 80 && sec && el.offsetParent !== null) {
+                    els.push({ el: el, secao: sec, y: el.getBoundingClientRect().top + window.scrollY });
+                }
+            });
+        });
+        return els.sort(function(a, b) { return a.y - b.y; });
+    }
+
+    function buildTextareaMap() {
+        var headers = getSectionHeaders();
+        var textareas = Array.from(document.querySelectorAll('textarea'))
+            .filter(function(ta) { return ta.offsetParent !== null; })
+            .map(function(ta) { return { el: ta, y: ta.getBoundingClientRect().top + window.scrollY }; })
+            .sort(function(a, b) { return a.y - b.y; });
+        var map = {};
+        textareas.forEach(function(ta) {
+            var closest = null;
+            headers.forEach(function(h) { if (h.y < ta.y) closest = h; });
+            if (closest && !map[closest.secao]) map[closest.secao] = ta.el;
+        });
+        return map;
+    }
+
+    // ── Coleta de itens ───────────────────────────────────────────────────────
+    function getItemsFromDoc(doc) {
+        var items = [];
+        Array.from(doc.querySelectorAll('div[id*="Nodes"]')).forEach(function(container) {
+            Array.from(container.querySelectorAll('span, label, a')).forEach(function(el) {
+                var text = el.textContent.trim();
+                if (text.length > 5) items.push({ text: text, el: el });
+            });
+        });
+        return items;
+    }
+
+    function collectItems() {
+        logToSidebar('Buscando itens na pagina...', 'info');
+        return wait(2000).then(function() {
+            var all = getItemsFromDoc(document);
+            document.querySelectorAll('iframe').forEach(function(iframe) {
+                try {
+                    var fd = iframe.contentDocument || iframe.contentWindow.document;
+                    all = all.concat(getItemsFromDoc(fd));
+                } catch (_) {}
+            });
+            var seen = new Set();
+            all = all.filter(function(it) {
+                if (seen.has(it.text)) return false;
+                seen.add(it.text);
+                return true;
+            });
+            all.forEach(function(it) { it.el.style.outline = '1px solid rgba(59,130,246,0.3)'; });
+            logToSidebar(all.length + ' itens encontrados.', 'success');
+            return all;
+        });
+    }
+
+    // ── Webhook ───────────────────────────────────────────────────────────────
+    function callWebhook(data) {
+        return new Promise(function(resolve, reject) {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: settings.webhookUrl,
+                data: JSON.stringify(data),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + settings.authToken
+                },
+                onload: function(res) {
+                    try { resolve(JSON.parse(res.responseText)); }
+                    catch (e) { reject(new Error('Resposta invalida do webhook')); }
+                },
+                onerror: function() { reject(new Error('Erro de conexao com webhook')); }
+            });
+        });
+    }
+
+    // ── Automacao principal ───────────────────────────────────────────────────
+    function runAutomation(isAutoStart) {
         if (isRunning) return;
-        stopRequested = false; isRunning = true;
-        const btnStart = document.getElementById('siap-start');
-        const btnStop = document.getElementById('siap-stop');
-        const contextInput = document.getElementById('siap-context').value.trim() || 'Aleatório';
-        let qtdTotal = parseInt(document.getElementById('siap-qtd').value) || 1;
+        stopRequested = false;
+        isRunning = true;
 
-        const saved = loadState();
+        var btnStart = document.getElementById('siap-start');
+        var btnStop  = document.getElementById('siap-stop');
+        var contextInput = (document.getElementById('siap-context').value || '').trim() || 'Aleatorio';
+        var qtdTotal = parseInt(document.getElementById('siap-qtd').value) || 1;
+
+        var saved = loadState();
         if (isAutoStart && saved.totalAulas) {
             qtdTotal = saved.totalAulas;
             document.getElementById('siap-qtd').value = qtdTotal;
         }
-        
-        let aulaAtual = saved.currentAula || 1;
+
+        var aulaAtual = saved.currentAula || 1;
         if (aulaAtual > qtdTotal) {
-            logToSidebar(`✅ Concluído.`, 'success');
-            isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-            clearState(); return;
+            logToSidebar('Todas as aulas concluidas!', 'success');
+            isRunning = false;
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            clearState();
+            return;
         }
 
-        btnStart.disabled = true; btnStop.disabled = false;
-        logToSidebar(`▶️ Aula ${aulaAtual} de ${qtdTotal}`, 'info');
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+        logToSidebar('Iniciando aula ' + aulaAtual + ' de ' + qtdTotal, 'info');
 
-        try {
-            for (let aula = aulaAtual; aula <= qtdTotal; aula++) {
-                if (stopRequested) break;
-                const items = await collectItems();
-                if (items.length === 0) { logToSidebar('❌ Nenhum item.', 'error'); break; }
-                const taMap = buildTextareaMap();
+        var blacklist = ['aula','avalia','projet','grup','tecnolog','debate','estudo',
+                         'seminar','pesquis','contac','ludic','roda','convers','brinc',
+                         'jog','teatr','pati'];
 
-                const blacklist = ['aula', 'avalia', 'projet', 'grup', 'tecnolog', 'debate', 'estudo', 'seminar', 'pesquis', 'contac', 'ludic', 'roda', 'convers', 'brinc', 'jog', 'teatr', 'pati'];
-                
-                const habs = items.filter(it => it.text.includes('('));
-                const objs = items.filter(it => {
-                    const norm = normalizeText(it.text);
-                    return !it.text.includes('(') && !blacklist.some(r => norm.includes(r));
+        // Loop sequencial usando Promise chain
+        var aulaIndex = aulaAtual;
+
+        function processarAula(aula) {
+            if (aula > qtdTotal || stopRequested) {
+                logToSidebar('Finalizado.', 'success');
+                isRunning = false;
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                return;
+            }
+
+            collectItems().then(function(items) {
+                if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
+                if (items.length === 0) {
+                    logToSidebar('Nenhum item encontrado.', 'error');
+                    isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                    return;
+                }
+
+                var taMap = buildTextareaMap();
+
+                var habs = items.filter(function(it) { return it.text.indexOf('(') !== -1; });
+                var objs = items.filter(function(it) {
+                    if (it.text.indexOf('(') !== -1) return false;
+                    var norm = normalizeText(it.text);
+                    return !blacklist.some(function(r) { return norm.indexOf(r) !== -1; });
                 });
 
-                logToSidebar(`Habs: ${habs.length} | Objs: ${objs.length}`, 'info');
+                logToSidebar('Habilidades: ' + habs.length + ' | Conteudos: ' + objs.length, 'info');
 
-                const seed = Math.floor(Math.random() * 1000000);
-                const prompt = `Professor Especialista. Aula ID: ${seed}. Contexto: ${contextInput}
+                if (habs.length === 0 || objs.length < 2) {
+                    logToSidebar('Itens insuficientes.', 'error');
+                    isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                    return;
+                }
 
-LISTA A (HABILIDADES):
-${habs.map((it, idx) => `A${idx}: ${it.text}`).join('\n')}
+                // ── PASSO 1: Selecionar indices ───────────────────────────────
+                logToSidebar('Solicitando selecao de itens...', 'info', 1);
 
-LISTA B (CONTEÚDOS):
-${objs.map((it, idx) => `B${idx}: ${it.text}`).join('\n')}
+                var seed = Math.floor(Math.random() * 999999);
+                var listaHabs = habs.map(function(it, idx) { return 'H' + idx + ': ' + it.text; }).join('\n');
+                var listaObjs = objs.map(function(it, idx) { return 'C' + idx + ': ' + it.text; }).join('\n');
 
-REGRAS: Escolha 1 da A e 2 da B. JSON: { "hab_idx": 0, "obj_indices": [0, 1], "metodologia": "...", "avaliacao": "..." }`;
+                var prompt1 = '[SEED:' + seed + '] Use este seed para variar sua escolha a cada chamada.\n\n'
+                    + 'Voce e um professor especialista. Cada aula deve ser DIFERENTE das anteriores.\n\n'
+                    + 'HABILIDADES (escolha EXATAMENTE 1 — varie a escolha, nao repita sempre a mesma):\n' + listaHabs + '\n\n'
+                    + 'CONTEUDOS (escolha EXATAMENTE 2 diferentes — varie a combinacao a cada aula):\n' + listaObjs + '\n\n'
+                    + 'Contexto: ' + contextInput + '\n\n'
+                    + 'Responda APENAS em JSON valido:\n'
+                    + '{ "hab_idx": <numero>, "obj_indices": [<numero>, <numero>] }';
 
-                logToSidebar(`Solicitando IA...`, 'info');
-                let parsed;
-                try { parsed = await callWebhook({ prompt }); } catch(e) { logToSidebar(`❌ Erro: ${e.message}`, 'error'); break; }
-                if (stopRequested) break;
+                callWebhook({ prompt: prompt1 }).then(function(selecao) {
+                    if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
 
-                if (parsed) {
-                    if (parsed.hab_idx !== undefined && habs[parsed.hab_idx]) {
-                        logToSidebar(`👉 Habilidade: ${habs[parsed.hab_idx].text.substring(0, 30)}...`, 'warn');
-                        await robustClick(habs[parsed.hab_idx].el);
-                        await wait(1200);
+                    if (selecao.hab_idx === undefined || !Array.isArray(selecao.obj_indices) || selecao.obj_indices.length < 2) {
+                        logToSidebar('Selecao invalida da IA.', 'error');
+                        isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                        return;
                     }
-                    if (parsed.obj_indices && Array.isArray(parsed.obj_indices)) {
-                        for (let bIdx of parsed.obj_indices) {
-                            if (objs[bIdx]) {
-                                logToSidebar(`👉 Conteúdo: ${objs[bIdx].text.substring(0, 30)}...`, 'warn');
-                                await robustClick(objs[bIdx].el);
-                                await wait(1200);
-                            }
+
+                    var habSelecionada = habs[selecao.hab_idx];
+                    var objSelecionados = selecao.obj_indices.map(function(i) { return objs[i]; }).filter(Boolean);
+
+                    if (!habSelecionada || objSelecionados.length < 2) {
+                        logToSidebar('Indices fora do intervalo.', 'error');
+                        isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                        return;
+                    }
+
+                    logToSidebar('Habilidade: ' + habSelecionada.text.substring(0, 50), 'warn', 1);
+                    objSelecionados.forEach(function(o) {
+                        logToSidebar('Conteudo: ' + o.text.substring(0, 50), 'warn', 1);
+                    });
+
+                    // ── PASSO 2: Gerar texto coeso ────────────────────────────
+                    logToSidebar('Gerando metodologia e avaliacao...', 'info', 2);
+
+                    var abordagens = [
+                        'atividade pratica em grupos pequenos com material concreto',
+                        'resolucao de problemas reais do cotidiano dos alunos',
+                        'jogo educativo ou dinamica ludica',
+                        'debate e discussao orientada com perguntas provocadoras',
+                        'producao textual ou registro individual dos alunos',
+                        'uso de imagens, mapas ou infograficos como ponto de partida',
+                        'experimentacao ou manipulacao de objetos concretos',
+                        'sequencia de exercicios progressivos (do simples ao complexo)',
+                        'estudo de caso com situacao-problema contextualizada',
+                        'atividade de investigacao guiada com perguntas e hipoteses'
+                    ];
+                    var abordagemEscolhida = abordagens[seed % abordagens.length];
+                    logToSidebar('Abordagem: ' + abordagemEscolhida, 'info', 2);
+
+                    var prompt2 = '[SEED:' + seed + ']\n\n'
+                        + 'Voce e uma professora especialista criando um plano de aula UNICO e ORIGINAL.\n\n'
+                        + 'HABILIDADE que sera trabalhada:\n"' + habSelecionada.text + '"\n\n'
+                        + 'CONTEUDOS que serao abordados:\n'
+                        + '- "' + objSelecionados[0].text + '"\n'
+                        + '- "' + objSelecionados[1].text + '"\n\n'
+                        + 'Contexto da turma: ' + contextInput + '\n\n'
+                        + 'ABORDAGEM OBRIGATORIA para esta aula: ' + abordagemEscolhida + '\n'
+                        + '(Use esta abordagem como estrategia central da metodologia. Nao use outra.)\n\n'
+                        + 'Com base NA HABILIDADE e NA ABORDAGEM acima, escreva:\n'
+                        + '1. METODOLOGIA (3 a 5 frases): descreva a aula usando A ABORDAGEM INDICADA para ensinar '
+                        + 'a habilidade "' + habSelecionada.text.substring(0, 60) + '". '
+                        + 'Seja especifico: o que o professor faz, o que os alunos fazem, qual recurso e usado.\n'
+                        + '2. AVALIACAO (2 a 3 frases): descreva como verificar se os alunos desenvolveram a habilidade, '
+                        + 'de forma coerente com a abordagem usada.\n\n'
+                        + 'Responda APENAS em JSON valido:\n'
+                        + '{ "metodologia": "<texto>", "avaliacao": "<texto>" }';
+
+                    callWebhook({ prompt: prompt2 }).then(function(textos) {
+                        if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
+
+                        if (!textos.metodologia || !textos.avaliacao) {
+                            logToSidebar('Textos invalidos da IA.', 'error');
+                            isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                            return;
                         }
-                    }
-                    if (taMap['metodologias'] && parsed.metodologia && !stopRequested) await typeIntoTextarea(taMap['metodologias'], parsed.metodologia);
-                    if (taMap['avaliacoes'] && parsed.avaliacao && !stopRequested) await typeIntoTextarea(taMap['avaliacoes'], parsed.avaliacao);
-                }
 
-                if (stopRequested) break;
-                logToSidebar('✅ Aguardando para salvar...', 'warn');
-                await wait(4000);
-                if (stopRequested) break;
+                        logToSidebar('Metodologia gerada (' + textos.metodologia.length + ' chars)', 'success', 2);
+                        logToSidebar('Avaliacao gerada (' + textos.avaliacao.length + ' chars)', 'success', 2);
 
-                if (aula < qtdTotal) {
-                    saveState({ currentAula: aula + 1, context: contextInput, totalAulas: qtdTotal, isAutoStart: true });
-                } else {
-                    clearState();
-                }
+                        // ── PASSO 3: Preencher formulario ─────────────────────
+                        logToSidebar('Preenchendo formulario...', 'info', 3);
 
-                const botoes = document.querySelectorAll('input[type="submit"], button');
-                let btnSalvar = null;
-                for (let b of botoes) {
-                    if (b.id && b.id.includes('SalvarProximo')) { btnSalvar = b; break; }
-                    if (b.value && (b.value.includes('Salvar') || b.value.includes('Próximo'))) { btnSalvar = b; break; }
-                }
-                if (btnSalvar && !stopRequested) { await robustClick(btnSalvar); return; }
-                else { logToSidebar('⏹️ Interrompido.', 'info'); break; }
-            }
-        } finally {
-            isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                        robustClick(habSelecionada.el).then(function() {
+                            return wait(1200);
+                        }).then(function() {
+                            // Clica nos conteudos sequencialmente
+                            return objSelecionados.reduce(function(chain, obj) {
+                                return chain.then(function() {
+                                    if (stopRequested) return;
+                                    return robustClick(obj.el).then(function() { return wait(1200); });
+                                });
+                            }, Promise.resolve());
+                        }).then(function() {
+                            if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
+                            var p = Promise.resolve();
+                            if (taMap['metodologias'] && textos.metodologia) {
+                                p = p.then(function() { return typeIntoTextarea(taMap['metodologias'], textos.metodologia); }).then(function() { return wait(600); });
+                            }
+                            if (taMap['avaliacoes'] && textos.avaliacao) {
+                                p = p.then(function() { return typeIntoTextarea(taMap['avaliacoes'], textos.avaliacao); }).then(function() { return wait(600); });
+                            }
+                            return p;
+                        }).then(function() {
+                            if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
+                            logToSidebar('Aguardando para salvar...', 'warn');
+                            return wait(4000);
+                        }).then(function() {
+                            if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
+
+                            if (aula < qtdTotal) {
+                                saveState({ currentAula: aula + 1, context: contextInput, totalAulas: qtdTotal, isAutoStart: true });
+                            } else {
+                                clearState();
+                            }
+
+                            var botoes = Array.from(document.querySelectorAll('input[type="submit"], button'));
+                            var btnSalvar = null;
+                            for (var i = 0; i < botoes.length; i++) {
+                                var b = botoes[i];
+                                if (b.id && b.id.indexOf('SalvarProximo') !== -1) { btnSalvar = b; break; }
+                                if (b.value && (b.value.indexOf('Salvar') !== -1 || b.value.indexOf('Pr') !== -1)) { btnSalvar = b; break; }
+                            }
+
+                            if (btnSalvar && !stopRequested) {
+                                logToSidebar('Salvando...', 'success', 3);
+                                return robustClick(btnSalvar);
+                            } else {
+                                logToSidebar('Concluido (botao salvar nao encontrado).', 'info');
+                                isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                            }
+                        }).catch(function(err) {
+                            logToSidebar('Erro no passo 3: ' + err.message, 'error');
+                            isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                        });
+
+                    }).catch(function(err) {
+                        logToSidebar('Erro no passo 2: ' + err.message, 'error');
+                        isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                    });
+
+                }).catch(function(err) {
+                    logToSidebar('Erro no passo 1: ' + err.message, 'error');
+                    isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+                });
+
+            }).catch(function(err) {
+                logToSidebar('Erro ao coletar itens: ' + err.message, 'error');
+                isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+            });
         }
-    };
 
-    const initSidebar = () => {
+        processarAula(aulaIndex);
+    }
+
+    // ── Plano ─────────────────────────────────────────────────────────────────
+    function detectPlan(token) {
+        var t = (token || '').toLowerCase();
+        if (t.indexOf('admin') === 0)  return { label: 'Admin',  cls: 'siap-plan-admin' };
+        if (t.indexOf('basico') === 0) return { label: 'Basico', cls: 'siap-plan-basico' };
+        return { label: 'Padrao', cls: 'siap-plan-padrao' };
+    }
+
+    // ── Ping de conectividade ─────────────────────────────────────────────────
+    function pingOnline() {
+        var dot = document.getElementById('siap-online-dot');
+        if (!dot) return;
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: settings.webhookUrl.replace('/webhook/siap-automator', '/healthz')
+                .replace('/webhook/siap-automator', '') + '/favicon.ico',
+            timeout: 5000,
+            onload:  function() { dot.className = 'siap-online-dot online'; dot.title = 'Online'; },
+            onerror: function() { dot.className = 'siap-online-dot'; dot.title = 'Offline'; },
+            ontimeout: function() { dot.className = 'siap-online-dot'; dot.title = 'Timeout'; }
+        });
+    }
+
+    // ── Sidebar ───────────────────────────────────────────────────────────────
+    function initSidebar() {
         if (document.getElementById('siap-sidebar')) return;
-        const saved = loadState();
-        const resumeHint = saved.currentAula ? ` (Aula ${saved.currentAula})` : '';
 
-        document.body.insertAdjacentHTML('beforeend', `
-            <div id="siap-sidebar">
-                <div class="siap-header"><span>🤖 SIAP Automator V11.2</span><button id="siap-config">⚙️</button></div>
-                <div class="siap-content">
-                    <label class="siap-label">📝 Contexto</label>
-                    <textarea id="siap-context" class="siap-textarea" rows="3">${saved.context || ''}</textarea>
-                    <label class="siap-label">🔢 Aulas</label>
-                    <input type="number" id="siap-qtd" class="siap-input" value="${saved.totalAulas || 1}">
-                    <div class="siap-btn-group">
-                        <button id="siap-start" class="siap-btn">🚀 Iniciar${resumeHint}</button>
-                        <button id="siap-stop" class="siap-btn" disabled>⏹️ Parar</button>
-                    </div>
-                    <div id="siap-log-output"></div>
-                </div>
-            </div>
-        `);
+        var saved = loadState();
+        var resumeHint = saved.currentAula ? ' (Aula ' + saved.currentAula + ')' : '';
+        var plan = detectPlan(settings.authToken);
+        var isMinimized = GM_getValue('siap_minimized', false);
 
-        document.getElementById('siap-start').addEventListener('click', () => runAutomation(false));
-        document.getElementById('siap-stop').addEventListener('click', () => { stopRequested = true; saveState({ isAutoStart: false }); logToSidebar('⏹️ Parando...', 'error'); });
-        document.getElementById('siap-config').addEventListener('click', () => {
-            const url = prompt("URL Webhook:", settings.webhookUrl);
-            const token = prompt("Token:", settings.authToken);
-            if (url && token) { settings.webhookUrl = url; settings.authToken = token; GM_setValue(SETTINGS_KEY, settings); location.reload(); }
+        var sidebar = document.createElement('div');
+        sidebar.id = 'siap-sidebar';
+        if (isMinimized) sidebar.className = 'siap-minimized';
+
+        sidebar.innerHTML = [
+            '<div class="siap-header">',
+            '  <div class="siap-header-info">',
+            '    <div class="siap-title">SIAP Automator V12</div>',
+            '    <div class="siap-meta">',
+            '      <span class="siap-plan-badge ' + plan.cls + '">' + plan.label + '</span>',
+            '      <span class="siap-online-dot" id="siap-online-dot" title="Verificando..."></span>',
+            '    </div>',
+            '  </div>',
+            '  <div class="siap-header-btns">',
+            '    <button id="siap-config" title="Configuracoes">&#9881;</button>',
+            '    <button id="siap-minimize" title="Minimizar">&#9664;</button>',
+            '  </div>',
+            '</div>',
+            '<div class="siap-content">',
+            '  <label class="siap-label">Contexto da turma</label>',
+            '  <textarea id="siap-context" class="siap-textarea" rows="3">' + (saved.context || '') + '</textarea>',
+            '  <label class="siap-label">Quantidade de aulas</label>',
+            '  <input type="number" id="siap-qtd" class="siap-input" value="' + (saved.totalAulas || 1) + '" min="1">',
+            '  <div class="siap-btn-group">',
+            '    <button id="siap-start" class="siap-btn">Iniciar' + resumeHint + '</button>',
+            '    <button id="siap-stop" class="siap-btn" disabled>Parar</button>',
+            '  </div>',
+            '  <div id="siap-log-output"></div>',
+            '</div>'
+        ].join('');
+
+        document.body.appendChild(sidebar);
+
+        // Minimize toggle
+        document.getElementById('siap-minimize').addEventListener('click', function() {
+            var s = document.getElementById('siap-sidebar');
+            var minimized = s.classList.contains('siap-minimized');
+            if (minimized) {
+                s.classList.remove('siap-minimized');
+                this.innerHTML = '&#9664;';
+                this.title = 'Minimizar';
+                GM_setValue('siap_minimized', false);
+            } else {
+                s.classList.add('siap-minimized');
+                this.innerHTML = '&#9654;';
+                this.title = 'Expandir';
+                GM_setValue('siap_minimized', true);
+            }
         });
 
-        if (saved.isAutoStart && saved.currentAula <= saved.totalAulas) {
-            logToSidebar(`Retomando aula ${saved.currentAula}...`, 'info');
-            setTimeout(() => runAutomation(true), 3000);
-        } else {
-            logToSidebar('Sistema Pronto.', 'success');
+        // Set correct arrow on load
+        if (isMinimized) {
+            document.getElementById('siap-minimize').innerHTML = '&#9654;';
+            document.getElementById('siap-minimize').title = 'Expandir';
         }
-    };
+
+        document.getElementById('siap-start').addEventListener('click', function() { runAutomation(false); });
+        document.getElementById('siap-stop').addEventListener('click', function() {
+            stopRequested = true;
+            saveState({ isAutoStart: false });
+            logToSidebar('Parando...', 'error');
+        });
+        document.getElementById('siap-config').addEventListener('click', function() {
+            var url   = prompt('URL do Webhook:', settings.webhookUrl);
+            var token = prompt('Token:', settings.authToken);
+            if (url && token) {
+                settings.webhookUrl = url;
+                settings.authToken  = token;
+                GM_setValue(SETTINGS_KEY, settings);
+                location.reload();
+            }
+        });
+
+        // Ping imediato + intervalo de 30s
+        pingOnline();
+        setInterval(pingOnline, 30000);
+
+        if (saved.isAutoStart && saved.currentAula && saved.currentAula <= saved.totalAulas) {
+            logToSidebar('Retomando aula ' + saved.currentAula + ' de ' + saved.totalAulas + '...', 'info');
+            setTimeout(function() { runAutomation(true); }, 3000);
+        } else {
+            logToSidebar('Sistema pronto. V12.0', 'success');
+        }
+
+        console.log('[SIAP V12] Sidebar criada com sucesso.');
+    }
 
     initSidebar();
+
 })();
