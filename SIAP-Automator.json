@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         SIAP Automator - V9.2 (Restored Logic)
+// @name         SIAP Automator - V11.2 (The Precise Striker)
 // @namespace    http://tampermonkey.net/
-// @version      9.2.0
-// @description  Lógica ORIGINAL restaurada com interface moderna e início apenas manual.
+// @version      11.2.0
+// @description  Foco total na precisão do clique em checkboxes e rádio botões.
 // @match        https://siap.educacao.go.gov.br/*
 // @match        https://*.siap.com.br/*
 // @match        https://*.siapnet.com.br/*
@@ -21,7 +21,7 @@
     if (window.SiapAutomator && window.SiapAutomator.isInitialized) return;
     window.SiapAutomator = { isInitialized: true };
 
-    // --- Estilização Moderna (GM_addStyle) ---
+    // --- Estilização Moderna ---
     GM_addStyle(`
         :root {
             --siap-bg: #121218; --siap-card: #1e1e26; --siap-accent: #3b82f6;
@@ -52,15 +52,9 @@
             cursor: pointer; font-weight: bold; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px;
             transition: all 0.2s; color: white !important;
         }
-        .siap-btn:active { transform: scale(0.97); }
-        .siap-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         #siap-start { background: var(--siap-success) !important; }
         #siap-stop { background: var(--siap-error) !important; }
         #siap-config { background: transparent !important; border: none !important; color: white !important; cursor: pointer; font-size: 18px; }
-        .siap-info-box {
-            background: rgba(59, 130, 246, 0.1); border-left: 3px solid var(--siap-accent);
-            padding: 10px; border-radius: 4px; font-size: 10px; line-height: 1.4; color: #bfdbfe;
-        }
         #siap-log-output {
             background: #09090b !important; padding: 12px !important; flex: 1; overflow-y: auto;
             font-family: 'Consolas', monospace !important; font-size: 10px !important;
@@ -69,7 +63,7 @@
         #siap-log-output p { margin: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
     `);
 
-    // --- LÓGICA ORIGINAL (Restaurada linha por linha) ---
+    // --- Lógica Original ---
     const SETTINGS_KEY = 'siap_automator_settings';
     const settings = GM_getValue(SETTINGS_KEY, {
         webhookUrl: 'https://pc-do-gon.tailaa9b6a.ts.net/webhook/siap-automator',
@@ -91,8 +85,8 @@
         const el = document.getElementById('siap-log-output');
         if (!el) return;
         const p = document.createElement('p');
-        p.style.margin = '2px 0';
-        p.style.color = type === 'error' ? '#ff8888' : type === 'warn' ? '#ffaa00' : type === 'success' ? '#00ff88' : '#00ccff';
+        const colors = { error: '#ff8888', warn: '#ffaa00', success: '#00ff88', info: '#00ccff' };
+        p.style.color = colors[type] || colors.info;
         p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
         el.appendChild(p);
         el.scrollTop = el.scrollHeight;
@@ -100,41 +94,46 @@
 
     const wait = (ms) => new Promise(r => setTimeout(r, ms));
     const fireEvent = (target, eventName) => {
-        try { target.dispatchEvent(new MouseEvent(eventName, { bubbles: true, cancelable: true })); }
-        catch (_) {
-            try {
-                const evt = document.createEvent('MouseEvents');
-                evt.initMouseEvent(eventName, true, true, null, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
-                target.dispatchEvent(evt);
-            } catch (e2) { logToSidebar(`⚠️ fireEvent falhou: ${e2.message}`, 'warn'); }
-        }
+        try { target.dispatchEvent(new MouseEvent(eventName, { bubbles: true, cancelable: true })); } catch (_) {}
     };
+    
     const robustClick = async (el) => {
         if (stopRequested) return;
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        await wait(400);
-        ['mousedown', 'mouseup', 'click'].forEach(name => fireEvent(el, name));
-        const parent = el.closest('a, label, li, td, tr, div[onclick]');
-        if (parent && parent !== el) {
-            await wait(150);
-            ['mousedown', 'mouseup', 'click'].forEach(name => fireEvent(parent, name));
+        
+        // Tenta achar o checkbox/input real dentro do elemento ou pai
+        let target = el.querySelector('input') || (el.tagName === 'INPUT' ? el : null);
+        if (!target) {
+            const parent = el.parentElement;
+            if (parent) target = parent.querySelector('input');
         }
+        
+        const finalTarget = target || el;
+        finalTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Destaque visual
+        const oldOutline = finalTarget.style.outline;
+        finalTarget.style.outline = '4px solid #a855f7';
+        await wait(600);
+        
+        ['mousedown', 'mouseup', 'click'].forEach(name => fireEvent(finalTarget, name));
+        if (finalTarget.tagName === 'INPUT') {
+            finalTarget.checked = true;
+            finalTarget.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        await wait(400);
+        finalTarget.style.outline = oldOutline;
     };
+
     const typeIntoTextarea = async (el, text) => {
         if (stopRequested) return;
         el.focus();
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        await wait(300);
+        await wait(400);
         const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-        if (nativeSetter) nativeSetter.call(el, text);
-        else el.value = text;
+        if (nativeSetter) nativeSetter.call(el, text); else el.value = text;
         ['input', 'change', 'blur'].forEach(name => el.dispatchEvent(new Event(name, { bubbles: true })));
     };
 
-    const SECAO_KEYWORDS = {
-        metodologias: ['metodologia'],
-        avaliacoes: ['avalia'],
-    };
     const detectSecao = (text) => {
         const t = text.toLowerCase();
         if (t.includes('metodologia')) return 'metodologias';
@@ -142,9 +141,10 @@
         return null;
     };
     const getSectionHeaders = () => {
-        const candidates = Array.from(document.querySelectorAll('div, td, th, span, label, b, strong, h2, h3, h4, legend'))
-            .filter(el => { const t = el.textContent.trim(); return t.length > 3 && t.length < 80 && detectSecao(t) !== null && el.offsetParent !== null; });
-        return candidates.map(el => ({ el, secao: detectSecao(el.textContent.trim()), y: el.getBoundingClientRect().top + window.scrollY })).sort((a,b) => a.y - b.y);
+        return Array.from(document.querySelectorAll('div, td, th, span, label, b, strong, h2, h3, h4, legend'))
+            .filter(el => { const t = el.textContent.trim(); return t.length > 3 && t.length < 80 && detectSecao(t) !== null && el.offsetParent !== null; })
+            .map(el => ({ el, secao: detectSecao(el.textContent.trim()), y: el.getBoundingClientRect().top + window.scrollY }))
+            .sort((a,b) => a.y - b.y);
     };
     const buildTextareaMap = () => {
         const headers = getSectionHeaders();
@@ -165,63 +165,24 @@
         containers.forEach(container => {
             Array.from(container.querySelectorAll('span, label, a'))
                 .map(el => ({ text: el.textContent.trim(), el }))
-                .filter(it => it.text.length > 10)
+                .filter(it => it.text.length > 5)
                 .forEach(it => items.push(it));
         });
-        if (items.length === 0) {
-            Array.from(doc.querySelectorAll('span[id*="treeViewt"]'))
-                .map(el => ({ text: el.textContent.trim(), el }))
-                .filter(it => it.text.length > 15)
-                .forEach(it => items.push(it));
-        }
-        if (items.length === 0) {
-            Array.from(doc.querySelectorAll('span, label'))
-                .map(el => ({ text: el.textContent.trim(), el }))
-                .filter(it => it.text.length > 15 && it.el.offsetParent !== null)
-                .forEach(it => items.push(it));
-        }
         return items;
     };
 
     const collectItems = async () => {
-        logToSidebar('Buscando itens expandidos...', 'info');
-        await wait(1000);
+        logToSidebar('Buscando itens...', 'info');
+        await wait(2000); // Mais tempo para carregar categorias pesadas
         let all = getItemsFromDoc(document);
         document.querySelectorAll('iframe').forEach(iframe => {
             try { const fd = iframe.contentDocument || iframe.contentWindow.document; all = [...all, ...getItemsFromDoc(fd)]; } catch(_) {}
         });
         const seen = new Set();
         all = all.filter(it => { if(seen.has(it.text)) return false; seen.add(it.text); return true; });
-        all.forEach(it => (it.el.style.outline = '2px solid #0056b3'));
-        logToSidebar(`${all.length} itens clicáveis encontrados.`, 'success');
+        all.forEach(it => (it.el.style.outline = '1px solid rgba(59,130,246,0.3)'));
+        logToSidebar(`${all.length} itens encontrados.`, 'success');
         return all;
-    };
-
-    const validateAIResponse = (parsed, maxIndex) => {
-        if (!parsed || typeof parsed !== 'object') return null;
-        let selecionados = parsed.selecionados;
-        if (!Array.isArray(selecionados)) selecionados = [];
-        if (selecionados.length === 0) return null;
-        let validos = selecionados.filter(idx => typeof idx === 'number' && idx >= 0 && idx <= maxIndex);
-        if (validos.length === 0) return null;
-        let metodologia = (parsed.metodologia || '').trim().substring(0, 1500);
-        let avaliacao = (parsed.avaliacao || '').trim().substring(0, 500);
-        if (!metodologia) metodologia = 'Explicação na lousa e atividade individual.';
-        if (!avaliacao) avaliacao = 'Observação da participação e correção da atividade.';
-        return { selecionados: validos, metodologia, avaliacao };
-    };
-
-    const clickSalvarProximo = async () => {
-        const botoes = document.querySelectorAll('input[type="submit"], button');
-        let btn = null;
-        for (let b of botoes) {
-            if (b.id && b.id.includes('SalvarProximo')) { btn = b; break; }
-            if (b.value && (b.value.includes('Salvar') || b.value.includes('Próximo'))) { btn = b; break; }
-        }
-        if (!btn) btn = document.getElementById('cphFuncionalidade_cphCampos_btnSalvarProximo');
-        if (btn) { await robustClick(btn); logToSidebar('✅ Salvar/Próximo clicado.', 'info'); return true; }
-        logToSidebar('⚠️ Botão Salvar/Próximo não encontrado.', 'warn');
-        return false;
     };
 
     const callWebhook = (data) => {
@@ -230,34 +191,22 @@
                 method: "POST",
                 url: settings.webhookUrl,
                 data: JSON.stringify(data),
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${settings.authToken}`
-                },
-                onload: (res) => {
-                    try { resolve(JSON.parse(res.responseText)); } catch (e) { reject(e); }
-                },
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${settings.authToken}` },
+                onload: (res) => { try { resolve(JSON.parse(res.responseText)); } catch (e) { reject(e); } },
                 onerror: (err) => reject(err)
             });
         });
     };
 
-    let isRunning = false;
-
-    const stopAutomation = () => {
-        stopRequested = true;
-        logToSidebar('🛑 Solicitação de parada recebida. Aguardando fim da etapa atual...', 'warn');
-        const btnStop = document.getElementById('siap-stop');
-        const btnStart = document.getElementById('siap-start');
-        if (btnStop) btnStop.disabled = true;
-        if (btnStart) btnStart.disabled = false;
+    const normalizeText = (text) => {
+        return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     };
 
-    const runAutomation = async (isAutoStart = false) => {
-        if (isRunning) { logToSidebar('Automação já em execução.', 'warn'); return; }
-        stopRequested = false;
-        isRunning = true;
+    let isRunning = false;
 
+    const runAutomation = async (isAutoStart = false) => {
+        if (isRunning) return;
+        stopRequested = false; isRunning = true;
         const btnStart = document.getElementById('siap-start');
         const btnStop = document.getElementById('siap-stop');
         const contextInput = document.getElementById('siap-context').value.trim() || 'Aleatório';
@@ -268,91 +217,91 @@
             qtdTotal = saved.totalAulas;
             document.getElementById('siap-qtd').value = qtdTotal;
         }
-        if (saved.context && saved.context !== contextInput && !isAutoStart) {
-            logToSidebar('⚠️ Contexto mudou. Reiniciando progresso.', 'warn');
-            clearState();
-        }
-
+        
         let aulaAtual = saved.currentAula || 1;
         if (aulaAtual > qtdTotal) {
-            logToSidebar(`✅ Todas as ${qtdTotal} aulas já foram concluídas.`, 'success');
-            isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return;
+            logToSidebar(`✅ Concluído.`, 'success');
+            isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
+            clearState(); return;
         }
 
-        if (!isAutoStart) saveState({ currentAula: aulaAtual, context: contextInput, totalAulas: qtdTotal });
-
         btnStart.disabled = true; btnStop.disabled = false;
-        logToSidebar(`▶️ Iniciando aula ${aulaAtual} de ${qtdTotal}`, 'info');
+        logToSidebar(`▶️ Aula ${aulaAtual} de ${qtdTotal}`, 'info');
 
         try {
             for (let aula = aulaAtual; aula <= qtdTotal; aula++) {
-                if (stopRequested) {
-                    logToSidebar('⏸️ Automação interrompida pelo usuário. Progresso salvo.', 'warn');
-                    saveState({ currentAula: aula, context: contextInput, totalAulas: qtdTotal });
-                    break;
-                }
-                logToSidebar(`══ Aula ${aula}/${qtdTotal} ══`, 'info');
-                await wait(1500);
                 if (stopRequested) break;
-
                 const items = await collectItems();
-                if (items.length === 0) { logToSidebar('❌ Nenhum item encontrado. Expanda as pastas!', 'error'); break; }
+                if (items.length === 0) { logToSidebar('❌ Nenhum item.', 'error'); break; }
                 const taMap = buildTextareaMap();
 
-                const prompt = `Você é uma professora brasileira. A aula será aplicada SOMENTE por você, na sala de aula, com recursos simples (lousa, folhas, vídeos, áudios). Nada de convidados ou atividades externas.
-Contexto: ${contextInput}
-Itens disponíveis:
-${items.map((it, idx) => `${idx}: ${it.text}`).join('\n')}
-INSTRUÇÕES:
-1. Escolha exatamente 1 item que seja HABILIDADE (índice 0, 1 ou 2).
-2. Escolha de 0 a 3 itens que sejam OBJETIVOS (índices a partir de 3).
-3. "metodologia": Descreva o que você fará em 2-3 linhas. **CRIE METODOLOGIAS DIVERSIFICADAS: Evite repetições e frases prontas.** NÃO mencione índices.
-4. "avaliacao": Como avaliará. **Varie os métodos de avaliação para cada aula.**
-Responda SOMENTE com JSON:
-{ "selecionados": [indice_da_habilidade, ...], "metodologia": "texto", "avaliacao": "texto" }`;
+                const blacklist = ['aula', 'avalia', 'projet', 'grup', 'tecnolog', 'debate', 'estudo', 'seminar', 'pesquis', 'contac', 'ludic', 'roda', 'convers', 'brinc', 'jog', 'teatr', 'pati'];
+                
+                const habs = items.filter(it => it.text.includes('('));
+                const objs = items.filter(it => {
+                    const norm = normalizeText(it.text);
+                    return !it.text.includes('(') && !blacklist.some(r => norm.includes(r));
+                });
 
-                const payload = { prompt, context: contextInput, options: items.map(it => it.text), stream: false, format: 'json' };
-                logToSidebar(`Enviando ${items.length} itens para a IA...`, 'info');
+                logToSidebar(`Habs: ${habs.length} | Objs: ${objs.length}`, 'info');
+
+                const seed = Math.floor(Math.random() * 1000000);
+                const prompt = `Professor Especialista. Aula ID: ${seed}. Contexto: ${contextInput}
+
+LISTA A (HABILIDADES):
+${habs.map((it, idx) => `A${idx}: ${it.text}`).join('\n')}
+
+LISTA B (CONTEÚDOS):
+${objs.map((it, idx) => `B${idx}: ${it.text}`).join('\n')}
+
+REGRAS: Escolha 1 da A e 2 da B. JSON: { "hab_idx": 0, "obj_indices": [0, 1], "metodologia": "...", "avaliacao": "..." }`;
+
+                logToSidebar(`Solicitando IA...`, 'info');
                 let parsed;
-                try { parsed = await callWebhook(payload); } catch(e) { logToSidebar(`❌ Erro no webhook: ${e.message}`, 'error'); break; }
+                try { parsed = await callWebhook({ prompt }); } catch(e) { logToSidebar(`❌ Erro: ${e.message}`, 'error'); break; }
                 if (stopRequested) break;
 
-                const validation = validateAIResponse(parsed, items.length-1);
-                if (!validation) {
-                    logToSidebar('⚠️ IA inválida. Usando fallback.', 'warn');
-                    const fallbackItem = items[0];
-                    if (fallbackItem && !stopRequested) { await robustClick(fallbackItem.el); }
-                    if (taMap['metodologias'] && !stopRequested) await typeIntoTextarea(taMap['metodologias'], 'Explicação na lousa.');
-                } else {
-                    const { selecionados, metodologia, avaliacao } = validation;
-                    for (let idx of selecionados) {
-                        if (stopRequested) break;
-                        const item = items[idx];
-                        if (item) { item.el.style.outline = '3px solid #00ff88'; await robustClick(item.el); await wait(800); }
+                if (parsed) {
+                    if (parsed.hab_idx !== undefined && habs[parsed.hab_idx]) {
+                        logToSidebar(`👉 Habilidade: ${habs[parsed.hab_idx].text.substring(0, 30)}...`, 'warn');
+                        await robustClick(habs[parsed.hab_idx].el);
+                        await wait(1200);
                     }
-                    if (taMap['metodologias'] && metodologia && !stopRequested) await typeIntoTextarea(taMap['metodologias'], metodologia);
-                    if (taMap['avaliacoes'] && avaliacao && !stopRequested) await typeIntoTextarea(taMap['avaliacoes'], avaliacao);
+                    if (parsed.obj_indices && Array.isArray(parsed.obj_indices)) {
+                        for (let bIdx of parsed.obj_indices) {
+                            if (objs[bIdx]) {
+                                logToSidebar(`👉 Conteúdo: ${objs[bIdx].text.substring(0, 30)}...`, 'warn');
+                                await robustClick(objs[bIdx].el);
+                                await wait(1200);
+                            }
+                        }
+                    }
+                    if (taMap['metodologias'] && parsed.metodologia && !stopRequested) await typeIntoTextarea(taMap['metodologias'], parsed.metodologia);
+                    if (taMap['avaliacoes'] && parsed.avaliacao && !stopRequested) await typeIntoTextarea(taMap['avaliacoes'], parsed.avaliacao);
                 }
 
                 if (stopRequested) break;
-                logToSidebar('✅ Salvando...', 'warn');
-                await wait(3000);
+                logToSidebar('✅ Aguardando para salvar...', 'warn');
+                await wait(4000);
                 if (stopRequested) break;
-                const savedOk = await clickSalvarProximo();
-                if (!savedOk) break;
 
                 if (aula < qtdTotal) {
-                    saveState({ currentAula: aula + 1, context: contextInput, totalAulas: qtdTotal });
-                    logToSidebar(`Recarregando para próxima aula...`, 'info');
-                    return;
+                    saveState({ currentAula: aula + 1, context: contextInput, totalAulas: qtdTotal, isAutoStart: true });
                 } else {
-                    clearState(); logToSidebar('🏁 Todas as aulas concluídas!', 'success');
+                    clearState();
                 }
+
+                const botoes = document.querySelectorAll('input[type="submit"], button');
+                let btnSalvar = null;
+                for (let b of botoes) {
+                    if (b.id && b.id.includes('SalvarProximo')) { btnSalvar = b; break; }
+                    if (b.value && (b.value.includes('Salvar') || b.value.includes('Próximo'))) { btnSalvar = b; break; }
+                }
+                if (btnSalvar && !stopRequested) { await robustClick(btnSalvar); return; }
+                else { logToSidebar('⏹️ Interrompido.', 'info'); break; }
             }
-        } catch(e) {
-            logToSidebar(`❌ Erro: ${e.message}`, 'error');
         } finally {
-            isRunning = false; btnStart.disabled = false; btnStop.disabled = true; stopRequested = false;
+            isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
         }
     };
 
@@ -363,7 +312,7 @@ Responda SOMENTE com JSON:
 
         document.body.insertAdjacentHTML('beforeend', `
             <div id="siap-sidebar">
-                <div class="siap-header"><span>🤖 SIAP Automator V9.2</span><button id="siap-config">⚙️</button></div>
+                <div class="siap-header"><span>🤖 SIAP Automator V11.2</span><button id="siap-config">⚙️</button></div>
                 <div class="siap-content">
                     <label class="siap-label">📝 Contexto</label>
                     <textarea id="siap-context" class="siap-textarea" rows="3">${saved.context || ''}</textarea>
@@ -379,16 +328,19 @@ Responda SOMENTE com JSON:
         `);
 
         document.getElementById('siap-start').addEventListener('click', () => runAutomation(false));
-        document.getElementById('siap-stop').addEventListener('click', stopAutomation);
+        document.getElementById('siap-stop').addEventListener('click', () => { stopRequested = true; saveState({ isAutoStart: false }); logToSidebar('⏹️ Parando...', 'error'); });
         document.getElementById('siap-config').addEventListener('click', () => {
-            const url = prompt("URL do webhook:", settings.webhookUrl);
+            const url = prompt("URL Webhook:", settings.webhookUrl);
             const token = prompt("Token:", settings.authToken);
             if (url && token) { settings.webhookUrl = url; settings.authToken = token; GM_setValue(SETTINGS_KEY, settings); location.reload(); }
         });
 
-        // --- AQUI ESTÁ A MUDANÇA: REMOVI O AUTO-START ---
-        logToSidebar('Sistema Pronto.', 'success');
-        if (saved.currentAula) logToSidebar(`🔄 Aula ${saved.currentAula} salva. Clique em Iniciar para retomar.`, 'warn');
+        if (saved.isAutoStart && saved.currentAula <= saved.totalAulas) {
+            logToSidebar(`Retomando aula ${saved.currentAula}...`, 'info');
+            setTimeout(() => runAutomation(true), 3000);
+        } else {
+            logToSidebar('Sistema Pronto.', 'success');
+        }
     };
 
     initSidebar();
