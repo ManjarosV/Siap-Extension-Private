@@ -1,0 +1,159 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "siap-automator",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "siap-automator"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CONFIGURAÇÃO: Adicione aqui os tokens dos seus usuários\nconst tokensValidos = [\"chave-do-amigo-1\", \"minha-chave-secreta\"];\n\nconst authHeader = $input.first().json.headers.authorization;\nconst tokenEnviado = authHeader ? authHeader.replace('Bearer ', '') : null;\n\nif (tokensValidos.includes(tokenEnviado)) {\n  return [{ json: { authenticated: true, body: $input.first().json.body } }];\n} else {\n  return [{ json: { authenticated: false } }];\n}"
+      },
+      "id": "checkAuth",
+      "name": "Check Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": [
+          {
+            "value1": "={{ $json.authenticated }}",
+            "value2": "={{ true }}",
+            "type": "boolean"
+          }
+        ]
+      },
+      "id": "isAuth",
+      "name": "Is Authenticated?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.3:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3.1\",\n  \"prompt\": \"{{ $node[\"Check Auth\"].json.body.prompt }}\",\n  \"stream\": false,\n  \"format\": \"json\",\n  \"options\": {\n    \"num_predict\": 500,\n    \"temperature\": 0.1\n  }\n}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "ollamaRequest",
+      "name": "HTTP Request (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.response;\nif (!raw || raw.trim() === '') {\n  return [{ json: { error: 'Resposta vazia do modelo' } }];\n}\ntry {\n  const parsed = JSON.parse(raw);\n  return [{ json: parsed }];\n} catch (e) {\n  return [{ json: { error: 'JSON inválido', raw: raw } }];\n}"
+      },
+      "id": "parseResponse",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respondSuccess",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "httpCode": "401",
+        "responseBody": "{\"error\": \"Não autorizado: Token inválido ou ausente\"}",
+        "options": {}
+      },
+      "id": "respondError",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auth": {
+      "main": [
+        [
+          {
+            "node": "Is Authenticated?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Authenticated?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
