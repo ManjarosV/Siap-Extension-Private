@@ -11,6 +11,8 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @connect      pc-do-gon.tailaa9b6a.ts.net
+// @connect      localhost
+// @connect      127.0.0.1
 // @connect      *
 // @run-at       document-idle
 // ==/UserScript==
@@ -19,102 +21,34 @@
     'use strict';
 
     if (window.SiapAutomatorV12 && window.SiapAutomatorV12.isInitialized) return;
-    window.SiapAutomatorV12 = { isInitialized: true };
+    window.SiapAutomatorV12 = { isInitialized: true, settings: null };
 
-    console.log('[SIAP V12] Iniciando...');
-
-    // ── Estilos ──────────────────────────────────────────────────────────────
+    // ── Estilos ───────────────────────────────────────────────────────────────
     GM_addStyle([
-        ':root {',
-        '  --siap-bg:#121218; --siap-card:#1e1e26; --siap-accent:#3b82f6;',
-        '  --siap-success:#10b981; --siap-error:#ef4444; --siap-warn:#f59e0b;',
-        '  --siap-text:#f3f4f6; --siap-text-dim:#9ca3af; --siap-border:#334155;',
-        '}',
-        '#siap-sidebar {',
-        '  position:fixed; top:0; right:0; width:320px; height:100vh;',
-        '  background:var(--siap-bg) !important; color:var(--siap-text) !important;',
-        '  z-index:100000; display:flex; flex-direction:column;',
-        '  font-family:"Inter","Segoe UI",sans-serif !important;',
-        '  box-shadow:-10px 0 30px rgba(0,0,0,0.5);',
-        '  border-left:1px solid var(--siap-border) !important;',
-        '  transition:width 0.25s ease;',
-        '}',
-        '#siap-sidebar.siap-minimized {',
-        '  width:36px !important;',
-        '}',
-        '#siap-sidebar.siap-minimized .siap-content,',
-        '#siap-sidebar.siap-minimized .siap-header-info { display:none !important; }',
-        '#siap-sidebar.siap-minimized .siap-header {',
-        '  flex-direction:column; justify-content:flex-start; padding:10px 0; gap:14px; align-items:center;',
-        '}',
-        '#siap-sidebar.siap-minimized #siap-minimize { font-size:14px; }',
-        '#siap-sidebar.siap-minimized #siap-config { display:none !important; }',
-        '.siap-header {',
-        '  background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%);',
-        '  padding:12px 14px; font-weight:bold; display:flex; gap:8px;',
-        '  justify-content:space-between; align-items:center; flex-shrink:0;',
-        '}',
-        '.siap-header-info { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }',
-        '.siap-title { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
-        '.siap-meta { display:flex; align-items:center; gap:6px; }',
-        '.siap-plan-badge {',
-        '  font-size:9px; font-weight:700; padding:2px 7px; border-radius:20px;',
-        '  text-transform:uppercase; letter-spacing:0.5px;',
-        '}',
-        '.siap-plan-admin { background:#7c3aed; color:#fff; }',
-        '.siap-plan-basico { background:#059669; color:#fff; }',
-        '.siap-plan-padrao { background:#475569; color:#fff; }',
-        '.siap-online-dot {',
-        '  width:8px; height:8px; border-radius:50%; flex-shrink:0;',
-        '  background:#ef4444; transition:background 0.4s;',
-        '}',
-        '.siap-online-dot.online { background:#10b981; box-shadow:0 0 0 2px rgba(16,185,129,0.3); }',
-        '.siap-online-dot.online { animation:siap-pulse 2s infinite; }',
-        '@keyframes siap-pulse {',
-        '  0%,100% { box-shadow:0 0 0 2px rgba(16,185,129,0.3); }',
-        '  50%      { box-shadow:0 0 0 5px rgba(16,185,129,0.0); }',
-        '}',
-        '.siap-header-btns { display:flex; align-items:center; gap:6px; flex-shrink:0; }',
-        '#siap-minimize, #siap-config {',
-        '  background:transparent !important; border:none !important;',
-        '  color:rgba(255,255,255,0.8) !important; cursor:pointer;',
-        '  font-size:15px; padding:2px 4px; line-height:1;',
-        '}',
-        '#siap-minimize:hover, #siap-config:hover { color:#fff !important; }',
+        ':root { --siap-bg:#121218; --siap-card:#1e1e26; --siap-success:#10b981; --siap-error:#ef4444; --siap-text:#f3f4f6; --siap-text-dim:#9ca3af; --siap-border:#334155; }',
+        '#siap-sidebar { position:fixed; top:0; right:0; width:320px; height:100vh; background:var(--siap-bg) !important; color:var(--siap-text) !important; z-index:100000; display:flex; flex-direction:column; font-family:"Inter","Segoe UI",sans-serif !important; box-shadow:-10px 0 30px rgba(0,0,0,0.5); border-left:1px solid var(--siap-border) !important; }',
+        '.siap-header { background:linear-gradient(135deg,#1e3a8a,#1e40af); padding:16px 20px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }',
         '.siap-content { padding:20px; flex:1; display:flex; flex-direction:column; gap:12px; overflow-y:auto; }',
         '.siap-label { font-size:11px; font-weight:600; color:var(--siap-text-dim); text-transform:uppercase; margin-bottom:2px; }',
-        '.siap-input, .siap-textarea {',
-        '  width:100% !important; padding:10px !important; background:var(--siap-card) !important;',
-        '  color:var(--siap-text) !important; border:1px solid var(--siap-border) !important;',
-        '  border-radius:8px !important; font-size:13px !important; box-sizing:border-box !important;',
-        '}',
+        '.siap-input, .siap-textarea { width:100% !important; padding:10px !important; background:var(--siap-card) !important; color:var(--siap-text) !important; border:1px solid var(--siap-border) !important; border-radius:8px !important; font-size:13px !important; box-sizing:border-box !important; }',
         '.siap-btn-group { display:flex; gap:10px; margin-top:5px; }',
-        '.siap-btn {',
-        '  flex:1; padding:12px; border:none !important; border-radius:8px !important;',
-        '  cursor:pointer; font-weight:bold; font-size:13px;',
-        '  display:flex; align-items:center; justify-content:center; gap:8px;',
-        '  transition:all 0.2s; color:white !important;',
-        '}',
+        '.siap-btn { flex:1; padding:12px; border:none !important; border-radius:8px !important; cursor:pointer; font-weight:bold; font-size:13px; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; color:white !important; }',
         '#siap-start { background:var(--siap-success) !important; }',
-        '#siap-stop  { background:var(--siap-error) !important; }',
-        '#siap-log-output {',
-        '  background:#09090b !important; padding:12px !important; flex:1; overflow-y:auto;',
-        '  font-family:"Consolas",monospace !important; font-size:10px !important;',
-        '  border-radius:8px !important; border:1px solid var(--siap-border) !important;',
-        '}',
+        '#siap-stop { background:var(--siap-error) !important; }',
+        '#siap-config { background:transparent !important; border:none !important; color:white !important; cursor:pointer; font-size:18px; }',
+        '#siap-log-output { background:#09090b !important; padding:12px !important; flex:1; overflow-y:auto; font-family:"Consolas",monospace !important; font-size:10px !important; border-radius:8px !important; border:1px solid var(--siap-border) !important; }',
         '#siap-log-output p { margin:2px 0; border-bottom:1px solid rgba(255,255,255,0.02); }',
-        '.siap-badge {',
-        '  display:inline-block; background:#3b82f6; color:white; border-radius:4px;',
-        '  padding:1px 6px; font-size:9px; font-weight:bold; margin-right:4px;',
-        '}'
+        '.siap-badge { display:inline-block; background:#3b82f6; color:white; border-radius:4px; padding:1px 6px; font-size:9px; font-weight:bold; margin-right:4px; }'
     ].join('\n'));
 
-    // ── Estado ───────────────────────────────────────────────────────────────
+    // ── Estado ────────────────────────────────────────────────────────────────
     var SETTINGS_KEY = 'siap_automator_settings';
     var settings = GM_getValue(SETTINGS_KEY, {
         webhookUrl: 'https://pc-do-gon.tailaa9b6a.ts.net/webhook/siap-automator',
         authToken: 'admingon1'
     });
+    // Compartilha token via localStorage para o script companheiro ler
+    try { localStorage.setItem('siap_token', settings.authToken); } catch(_) {}
 
     var STORAGE_KEY = 'siap_automator_state';
     var stopRequested = false;
@@ -131,7 +65,7 @@
     function loadState() { return GM_getValue(STORAGE_KEY, {}); }
     function clearState() { GM_setValue(STORAGE_KEY, {}); }
 
-    // ── Log ──────────────────────────────────────────────────────────────────
+    // ── Log ───────────────────────────────────────────────────────────────────
     function logToSidebar(msg, type, step) {
         type = type || 'info';
         var el = document.getElementById('siap-log-output');
@@ -139,14 +73,44 @@
         var p = document.createElement('p');
         var colors = { error: '#ff8888', warn: '#ffaa00', success: '#00ff88', info: '#00ccff' };
         p.style.color = colors[type] || colors.info;
-        var time = new Date().toLocaleTimeString();
         var badge = step ? '<span class="siap-badge">P' + step + '</span>' : '';
-        p.innerHTML = '[' + time + '] ' + badge + msg;
+        p.innerHTML = '[' + new Date().toLocaleTimeString() + '] ' + badge + msg;
         el.appendChild(p);
         el.scrollTop = el.scrollHeight;
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // Trata erros de forma centralizada — erros de auth recebem destaque visual
+    function handleErr(etapa, err) {
+        isRunning = false;
+        var btnStart = document.getElementById('siap-start');
+        var btnStop  = document.getElementById('siap-stop');
+        if (btnStart) btnStart.disabled = false;
+        if (btnStop)  btnStop.disabled  = true;
+
+        var msg = err.message || String(err);
+        var isAuth = msg.indexOf('__AUTH__') === 0;
+
+        if (isAuth) {
+            var textoAuth = msg.replace('__AUTH__', '');
+            // Linha em destaque vermelho mais vivo no log
+            logToSidebar('', 'error');
+            logToSidebar('*** ' + textoAuth + ' ***', 'error');
+            logToSidebar('', 'error');
+            // Caixa de alerta flutuante acima do log
+            var log = document.getElementById('siap-log-output');
+            if (log) {
+                var alerta = document.createElement('div');
+                alerta.style.cssText = 'background:#7f1d1d;border:2px solid #ef4444;color:#fecaca;padding:10px 14px;border-radius:6px;font-size:11px;margin-bottom:8px;font-weight:600;line-height:1.5;position:relative';
+                alerta.innerHTML = '<span style="font-size:14px">&#128274;</span> ' + textoAuth
+                    + '<span onclick="this.parentNode.remove()" style="position:absolute;top:6px;right:8px;cursor:pointer;opacity:0.7;font-size:14px">&times;</span>';
+                log.parentNode.insertBefore(alerta, log);
+            }
+        } else {
+            logToSidebar('Erro ' + etapa + ': ' + msg, 'error');
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
     function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
     function fireEvent(target, eventName) {
@@ -168,9 +132,7 @@
                 finalTarget.dispatchEvent(new Event('change', { bubbles: true }));
             }
             return wait(400);
-        }).then(function() {
-            finalTarget.style.outline = oldOutline;
-        });
+        }).then(function() { finalTarget.style.outline = oldOutline; });
     }
 
     function typeIntoTextarea(el, text) {
@@ -180,15 +142,11 @@
             var desc = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
             var nativeSetter = desc && desc.set;
             if (nativeSetter) nativeSetter.call(el, text); else el.value = text;
-            ['input', 'change', 'blur'].forEach(function(name) {
-                el.dispatchEvent(new Event(name, { bubbles: true }));
-            });
+            ['input', 'change', 'blur'].forEach(function(name) { el.dispatchEvent(new Event(name, { bubbles: true })); });
         });
     }
 
-    function normalizeText(text) {
-        return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    }
+    function normalizeText(text) { return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 
     // ── Mapa de textareas ─────────────────────────────────────────────────────
     function detectSecao(text) {
@@ -199,15 +157,14 @@
     }
 
     function getSectionHeaders() {
-        var tags = ['div', 'td', 'th', 'span', 'label', 'b', 'strong', 'h2', 'h3', 'h4', 'legend'];
+        var tags = ['div','td','th','span','label','b','strong','h2','h3','h4','legend'];
         var els = [];
         tags.forEach(function(tag) {
             Array.from(document.querySelectorAll(tag)).forEach(function(el) {
                 var t = el.textContent.trim();
                 var sec = detectSecao(t);
-                if (t.length > 3 && t.length < 80 && sec && el.offsetParent !== null) {
+                if (t.length > 3 && t.length < 80 && sec && el.offsetParent !== null)
                     els.push({ el: el, secao: sec, y: el.getBoundingClientRect().top + window.scrollY });
-                }
             });
         });
         return els.sort(function(a, b) { return a.y - b.y; });
@@ -245,17 +202,10 @@
         return wait(2000).then(function() {
             var all = getItemsFromDoc(document);
             document.querySelectorAll('iframe').forEach(function(iframe) {
-                try {
-                    var fd = iframe.contentDocument || iframe.contentWindow.document;
-                    all = all.concat(getItemsFromDoc(fd));
-                } catch (_) {}
+                try { var fd = iframe.contentDocument || iframe.contentWindow.document; all = all.concat(getItemsFromDoc(fd)); } catch (_) {}
             });
             var seen = new Set();
-            all = all.filter(function(it) {
-                if (seen.has(it.text)) return false;
-                seen.add(it.text);
-                return true;
-            });
+            all = all.filter(function(it) { if (seen.has(it.text)) return false; seen.add(it.text); return true; });
             all.forEach(function(it) { it.el.style.outline = '1px solid rgba(59,130,246,0.3)'; });
             logToSidebar(all.length + ' itens encontrados.', 'success');
             return all;
@@ -266,20 +216,51 @@
     function callWebhook(data) {
         return new Promise(function(resolve, reject) {
             GM_xmlhttpRequest({
-                method: 'POST',
-                url: settings.webhookUrl,
-                data: JSON.stringify(data),
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + settings.authToken
-                },
+                method: 'POST', url: settings.webhookUrl, data: JSON.stringify(data),
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + settings.authToken },
                 onload: function(res) {
-                    try { resolve(JSON.parse(res.responseText)); }
-                    catch (e) { reject(new Error('Resposta invalida do webhook')); }
+                    var status = Number(res.status);
+                    var parsed = null;
+                    try { parsed = JSON.parse(res.responseText); } catch(_) {}
+
+                    // Detecta 401/403 tanto pelo status HTTP quanto pelo corpo da resposta
+                    var ehNaoAutorizado = (status === 401 || status === 403)
+                        || (parsed && parsed.error && (
+                            parsed.error.indexOf('autorizado') !== -1 ||
+                            parsed.error.indexOf('uthorized') !== -1
+                        ));
+
+                    if (ehNaoAutorizado) {
+                        var motivo = (parsed && parsed.motivo) ? parsed.motivo : '';
+                        var msg = motivo === 'Token ausente'
+                            ? 'TOKEN AUSENTE — configure seu token no icone de engrenagem.'
+                            : 'TOKEN INVALIDO: "' + settings.authToken + '" nao foi reconhecido. Abra as definicoes (engrenagem) e corrija.';
+                        reject(new Error('__AUTH__' + msg));
+                        return;
+                    }
+                    if (status === 0 || status >= 500) {
+                        reject(new Error('Servidor indisponivel (HTTP ' + status + '). Tente novamente.'));
+                        return;
+                    }
+                    if (!parsed) { reject(new Error('Resposta invalida do webhook')); return; }
+                    resolve(parsed);
                 },
-                onerror: function() { reject(new Error('Erro de conexao com webhook')); }
+                onerror: function() { reject(new Error('Sem conexao com o servidor. Verifique se o Tailscale esta ativo.')); },
+                ontimeout: function() { reject(new Error('O servidor demorou demais para responder (timeout).')); }
             });
         });
+    }
+
+    // Tenta extrair um objeto JSON de dentro de um texto livre (ex: markdown do modelo)
+    function extrairJson(texto) {
+        if (!texto || typeof texto !== 'string') return null;
+        // Remove blocos de markdown ```json ... ``` ou ``` ... ```
+        var limpo = texto.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+        // Localiza o primeiro { e o ultimo } para isolar o objeto
+        var ini = limpo.indexOf('{');
+        var fim = limpo.lastIndexOf('}');
+        if (ini === -1 || fim === -1 || fim <= ini) return null;
+        try { return JSON.parse(limpo.substring(ini, fim + 1)); } catch (e) { return null; }
     }
 
     // ── Automacao principal ───────────────────────────────────────────────────
@@ -294,51 +275,30 @@
         var qtdTotal = parseInt(document.getElementById('siap-qtd').value) || 1;
 
         var saved = loadState();
-        if (isAutoStart && saved.totalAulas) {
-            qtdTotal = saved.totalAulas;
-            document.getElementById('siap-qtd').value = qtdTotal;
-        }
+        if (isAutoStart && saved.totalAulas) { qtdTotal = saved.totalAulas; document.getElementById('siap-qtd').value = qtdTotal; }
 
         var aulaAtual = saved.currentAula || 1;
         if (aulaAtual > qtdTotal) {
             logToSidebar('Todas as aulas concluidas!', 'success');
-            isRunning = false;
-            btnStart.disabled = false;
-            btnStop.disabled = true;
-            clearState();
-            return;
+            isRunning = false; btnStart.disabled = false; btnStop.disabled = true; clearState(); return;
         }
 
-        btnStart.disabled = true;
-        btnStop.disabled = false;
+        btnStart.disabled = true; btnStop.disabled = false;
         logToSidebar('Iniciando aula ' + aulaAtual + ' de ' + qtdTotal, 'info');
 
-        var blacklist = ['aula','avalia','projet','grup','tecnolog','debate','estudo',
-                         'seminar','pesquis','contac','ludic','roda','convers','brinc',
-                         'jog','teatr','pati'];
-
-        // Loop sequencial usando Promise chain
-        var aulaIndex = aulaAtual;
+        var blacklist = ['aula','avalia','projet','grup','tecnolog','debate','estudo','seminar','pesquis','contac','ludic','roda','convers','brinc','jog','teatr','pati'];
 
         function processarAula(aula) {
             if (aula > qtdTotal || stopRequested) {
                 logToSidebar('Finalizado.', 'success');
-                isRunning = false;
-                btnStart.disabled = false;
-                btnStop.disabled = true;
-                return;
+                isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return;
             }
 
             collectItems().then(function(items) {
                 if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
-                if (items.length === 0) {
-                    logToSidebar('Nenhum item encontrado.', 'error');
-                    isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                    return;
-                }
+                if (items.length === 0) { logToSidebar('Nenhum item encontrado.', 'error'); isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
 
                 var taMap = buildTextareaMap();
-
                 var habs = items.filter(function(it) { return it.text.indexOf('(') !== -1; });
                 var objs = items.filter(function(it) {
                     if (it.text.indexOf('(') !== -1) return false;
@@ -347,52 +307,37 @@
                 });
 
                 logToSidebar('Habilidades: ' + habs.length + ' | Conteudos: ' + objs.length, 'info');
+                if (habs.length === 0 || objs.length < 2) { logToSidebar('Itens insuficientes.', 'error'); isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
 
-                if (habs.length === 0 || objs.length < 2) {
-                    logToSidebar('Itens insuficientes.', 'error');
-                    isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                    return;
-                }
-
-                // ── PASSO 1: Selecionar indices ───────────────────────────────
+                // PASSO 1: Selecionar indices
                 logToSidebar('Solicitando selecao de itens...', 'info', 1);
-
                 var seed = Math.floor(Math.random() * 999999);
                 var listaHabs = habs.map(function(it, idx) { return 'H' + idx + ': ' + it.text; }).join('\n');
                 var listaObjs = objs.map(function(it, idx) { return 'C' + idx + ': ' + it.text; }).join('\n');
 
                 var prompt1 = '[SEED:' + seed + '] Use este seed para variar sua escolha a cada chamada.\n\n'
                     + 'Voce e um professor especialista. Cada aula deve ser DIFERENTE das anteriores.\n\n'
-                    + 'HABILIDADES (escolha EXATAMENTE 1 — varie a escolha, nao repita sempre a mesma):\n' + listaHabs + '\n\n'
-                    + 'CONTEUDOS (escolha EXATAMENTE 2 diferentes — varie a combinacao a cada aula):\n' + listaObjs + '\n\n'
+                    + 'HABILIDADES (escolha EXATAMENTE 1 - varie a escolha, nao repita sempre a mesma):\n' + listaHabs + '\n\n'
+                    + 'CONTEUDOS (escolha EXATAMENTE 2 diferentes - varie a combinacao a cada aula):\n' + listaObjs + '\n\n'
                     + 'Contexto: ' + contextInput + '\n\n'
-                    + 'Responda APENAS em JSON valido:\n'
-                    + '{ "hab_idx": <numero>, "obj_indices": [<numero>, <numero>] }';
+                    + 'Responda APENAS em JSON valido:\n{ "hab_idx": <numero>, "obj_indices": [<numero>, <numero>] }';
 
                 callWebhook({ prompt: prompt1 }).then(function(selecao) {
                     if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
-
                     if (selecao.hab_idx === undefined || !Array.isArray(selecao.obj_indices) || selecao.obj_indices.length < 2) {
-                        logToSidebar('Selecao invalida da IA.', 'error');
-                        isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                        return;
+                        logToSidebar('Selecao invalida da IA.', 'error'); isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return;
                     }
 
                     var habSelecionada = habs[selecao.hab_idx];
                     var objSelecionados = selecao.obj_indices.map(function(i) { return objs[i]; }).filter(Boolean);
-
                     if (!habSelecionada || objSelecionados.length < 2) {
-                        logToSidebar('Indices fora do intervalo.', 'error');
-                        isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                        return;
+                        logToSidebar('Indices fora do intervalo.', 'error'); isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return;
                     }
 
                     logToSidebar('Habilidade: ' + habSelecionada.text.substring(0, 50), 'warn', 1);
-                    objSelecionados.forEach(function(o) {
-                        logToSidebar('Conteudo: ' + o.text.substring(0, 50), 'warn', 1);
-                    });
+                    objSelecionados.forEach(function(o) { logToSidebar('Conteudo: ' + o.text.substring(0, 50), 'warn', 1); });
 
-                    // ── PASSO 2: Gerar texto coeso ────────────────────────────
+                    // PASSO 2: Gerar texto coeso
                     logToSidebar('Gerando metodologia e avaliacao...', 'info', 2);
 
                     var abordagens = [
@@ -413,9 +358,7 @@
                     var prompt2 = '[SEED:' + seed + ']\n\n'
                         + 'Voce e uma professora especialista criando um plano de aula UNICO e ORIGINAL.\n\n'
                         + 'HABILIDADE que sera trabalhada:\n"' + habSelecionada.text + '"\n\n'
-                        + 'CONTEUDOS que serao abordados:\n'
-                        + '- "' + objSelecionados[0].text + '"\n'
-                        + '- "' + objSelecionados[1].text + '"\n\n'
+                        + 'CONTEUDOS que serao abordados:\n- "' + objSelecionados[0].text + '"\n- "' + objSelecionados[1].text + '"\n\n'
                         + 'Contexto da turma: ' + contextInput + '\n\n'
                         + 'ABORDAGEM OBRIGATORIA para esta aula: ' + abordagemEscolhida + '\n'
                         + '(Use esta abordagem como estrategia central da metodologia. Nao use outra.)\n\n'
@@ -425,28 +368,35 @@
                         + 'Seja especifico: o que o professor faz, o que os alunos fazem, qual recurso e usado.\n'
                         + '2. AVALIACAO (2 a 3 frases): descreva como verificar se os alunos desenvolveram a habilidade, '
                         + 'de forma coerente com a abordagem usada.\n\n'
-                        + 'Responda APENAS em JSON valido:\n'
-                        + '{ "metodologia": "<texto>", "avaliacao": "<texto>" }';
+                        + 'Responda APENAS em JSON valido:\n{ "metodologia": "<texto>", "avaliacao": "<texto>" }';
 
                     callWebhook({ prompt: prompt2 }).then(function(textos) {
                         if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
 
+                        // Fallback: workflow nao conseguiu fazer JSON.parse (modelo devolveu markdown ou texto livre)
+                        if ((!textos.metodologia || !textos.avaliacao) && textos.raw) {
+                            logToSidebar('Resposta bruta do modelo, tentando extrair JSON...', 'warn', 2);
+                            var extraido = extrairJson(textos.raw);
+                            if (extraido && extraido.metodologia && extraido.avaliacao) {
+                                textos = extraido;
+                            }
+                        }
+
                         if (!textos.metodologia || !textos.avaliacao) {
-                            logToSidebar('Textos invalidos da IA.', 'error');
-                            isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                            return;
+                            var detalhe = textos.error ? (' (' + textos.error + ')') : '';
+                            logToSidebar('Textos invalidos da IA.' + detalhe, 'error');
+                            isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return;
                         }
 
                         logToSidebar('Metodologia gerada (' + textos.metodologia.length + ' chars)', 'success', 2);
                         logToSidebar('Avaliacao gerada (' + textos.avaliacao.length + ' chars)', 'success', 2);
 
-                        // ── PASSO 3: Preencher formulario ─────────────────────
+                        // PASSO 3: Preencher formulario
                         logToSidebar('Preenchendo formulario...', 'info', 3);
 
                         robustClick(habSelecionada.el).then(function() {
                             return wait(1200);
                         }).then(function() {
-                            // Clica nos conteudos sequencialmente
                             return objSelecionados.reduce(function(chain, obj) {
                                 return chain.then(function() {
                                     if (stopRequested) return;
@@ -456,12 +406,10 @@
                         }).then(function() {
                             if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
                             var p = Promise.resolve();
-                            if (taMap['metodologias'] && textos.metodologia) {
+                            if (taMap['metodologias'] && textos.metodologia)
                                 p = p.then(function() { return typeIntoTextarea(taMap['metodologias'], textos.metodologia); }).then(function() { return wait(600); });
-                            }
-                            if (taMap['avaliacoes'] && textos.avaliacao) {
+                            if (taMap['avaliacoes'] && textos.avaliacao)
                                 p = p.then(function() { return typeIntoTextarea(taMap['avaliacoes'], textos.avaliacao); }).then(function() { return wait(600); });
-                            }
                             return p;
                         }).then(function() {
                             if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
@@ -469,12 +417,8 @@
                             return wait(4000);
                         }).then(function() {
                             if (stopRequested) { isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return; }
-
-                            if (aula < qtdTotal) {
-                                saveState({ currentAula: aula + 1, context: contextInput, totalAulas: qtdTotal, isAutoStart: true });
-                            } else {
-                                clearState();
-                            }
+                            if (aula < qtdTotal) saveState({ currentAula: aula + 1, context: contextInput, totalAulas: qtdTotal, isAutoStart: true });
+                            else clearState();
 
                             var botoes = Array.from(document.querySelectorAll('input[type="submit"], button'));
                             var btnSalvar = null;
@@ -483,59 +427,16 @@
                                 if (b.id && b.id.indexOf('SalvarProximo') !== -1) { btnSalvar = b; break; }
                                 if (b.value && (b.value.indexOf('Salvar') !== -1 || b.value.indexOf('Pr') !== -1)) { btnSalvar = b; break; }
                             }
+                            if (btnSalvar && !stopRequested) { logToSidebar('Salvando...', 'success', 3); return robustClick(btnSalvar); }
+                            else { logToSidebar('Concluido.', 'info'); isRunning = false; btnStart.disabled = false; btnStop.disabled = true; }
+                        }).catch(function(err) { logToSidebar('Erro P3: ' + err.message, 'error'); isRunning = false; btnStart.disabled = false; btnStop.disabled = true; });
 
-                            if (btnSalvar && !stopRequested) {
-                                logToSidebar('Salvando...', 'success', 3);
-                                return robustClick(btnSalvar);
-                            } else {
-                                logToSidebar('Concluido (botao salvar nao encontrado).', 'info');
-                                isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                            }
-                        }).catch(function(err) {
-                            logToSidebar('Erro no passo 3: ' + err.message, 'error');
-                            isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                        });
-
-                    }).catch(function(err) {
-                        logToSidebar('Erro no passo 2: ' + err.message, 'error');
-                        isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                    });
-
-                }).catch(function(err) {
-                    logToSidebar('Erro no passo 1: ' + err.message, 'error');
-                    isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-                });
-
-            }).catch(function(err) {
-                logToSidebar('Erro ao coletar itens: ' + err.message, 'error');
-                isRunning = false; btnStart.disabled = false; btnStop.disabled = true;
-            });
+                    }).catch(function(err) { handleErr('P2', err); });
+                }).catch(function(err) { handleErr('P1', err); });
+            }).catch(function(err) { handleErr('coleta', err); });
         }
 
-        processarAula(aulaIndex);
-    }
-
-    // ── Plano ─────────────────────────────────────────────────────────────────
-    function detectPlan(token) {
-        var t = (token || '').toLowerCase();
-        if (t.indexOf('admin') === 0)  return { label: 'Admin',  cls: 'siap-plan-admin' };
-        if (t.indexOf('basico') === 0) return { label: 'Basico', cls: 'siap-plan-basico' };
-        return { label: 'Padrao', cls: 'siap-plan-padrao' };
-    }
-
-    // ── Ping de conectividade ─────────────────────────────────────────────────
-    function pingOnline() {
-        var dot = document.getElementById('siap-online-dot');
-        if (!dot) return;
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: settings.webhookUrl.replace('/webhook/siap-automator', '/healthz')
-                .replace('/webhook/siap-automator', '') + '/favicon.ico',
-            timeout: 5000,
-            onload:  function() { dot.className = 'siap-online-dot online'; dot.title = 'Online'; },
-            onerror: function() { dot.className = 'siap-online-dot'; dot.title = 'Offline'; },
-            ontimeout: function() { dot.className = 'siap-online-dot'; dot.title = 'Timeout'; }
-        });
+        processarAula(aulaAtual);
     }
 
     // ── Sidebar ───────────────────────────────────────────────────────────────
@@ -544,26 +445,13 @@
 
         var saved = loadState();
         var resumeHint = saved.currentAula ? ' (Aula ' + saved.currentAula + ')' : '';
-        var plan = detectPlan(settings.authToken);
-        var isMinimized = GM_getValue('siap_minimized', false);
 
         var sidebar = document.createElement('div');
         sidebar.id = 'siap-sidebar';
-        if (isMinimized) sidebar.className = 'siap-minimized';
-
         sidebar.innerHTML = [
             '<div class="siap-header">',
-            '  <div class="siap-header-info">',
-            '    <div class="siap-title">SIAP Automator V12</div>',
-            '    <div class="siap-meta">',
-            '      <span class="siap-plan-badge ' + plan.cls + '">' + plan.label + '</span>',
-            '      <span class="siap-online-dot" id="siap-online-dot" title="Verificando..."></span>',
-            '    </div>',
-            '  </div>',
-            '  <div class="siap-header-btns">',
-            '    <button id="siap-config" title="Configuracoes">&#9881;</button>',
-            '    <button id="siap-minimize" title="Minimizar">&#9664;</button>',
-            '  </div>',
+            '  <span>SIAP Automator V12</span>',
+            '  <button id="siap-config">&#9881;</button>',
             '</div>',
             '<div class="siap-content">',
             '  <label class="siap-label">Contexto da turma</label>',
@@ -577,52 +465,17 @@
             '  <div id="siap-log-output"></div>',
             '</div>'
         ].join('');
-
         document.body.appendChild(sidebar);
-
-        // Minimize toggle
-        document.getElementById('siap-minimize').addEventListener('click', function() {
-            var s = document.getElementById('siap-sidebar');
-            var minimized = s.classList.contains('siap-minimized');
-            if (minimized) {
-                s.classList.remove('siap-minimized');
-                this.innerHTML = '&#9664;';
-                this.title = 'Minimizar';
-                GM_setValue('siap_minimized', false);
-            } else {
-                s.classList.add('siap-minimized');
-                this.innerHTML = '&#9654;';
-                this.title = 'Expandir';
-                GM_setValue('siap_minimized', true);
-            }
-        });
-
-        // Set correct arrow on load
-        if (isMinimized) {
-            document.getElementById('siap-minimize').innerHTML = '&#9654;';
-            document.getElementById('siap-minimize').title = 'Expandir';
-        }
 
         document.getElementById('siap-start').addEventListener('click', function() { runAutomation(false); });
         document.getElementById('siap-stop').addEventListener('click', function() {
-            stopRequested = true;
-            saveState({ isAutoStart: false });
-            logToSidebar('Parando...', 'error');
+            stopRequested = true; saveState({ isAutoStart: false }); logToSidebar('Parando...', 'error');
         });
         document.getElementById('siap-config').addEventListener('click', function() {
             var url   = prompt('URL do Webhook:', settings.webhookUrl);
             var token = prompt('Token:', settings.authToken);
-            if (url && token) {
-                settings.webhookUrl = url;
-                settings.authToken  = token;
-                GM_setValue(SETTINGS_KEY, settings);
-                location.reload();
-            }
+            if (url && token) { settings.webhookUrl = url; settings.authToken = token; GM_setValue(SETTINGS_KEY, settings); try { localStorage.setItem('siap_token', token); localStorage.setItem('siap_webhook', url); } catch(_) {} location.reload(); }
         });
-
-        // Ping imediato + intervalo de 30s
-        pingOnline();
-        setInterval(pingOnline, 30000);
 
         if (saved.isAutoStart && saved.currentAula && saved.currentAula <= saved.totalAulas) {
             logToSidebar('Retomando aula ' + saved.currentAula + ' de ' + saved.totalAulas + '...', 'info');
@@ -630,8 +483,6 @@
         } else {
             logToSidebar('Sistema pronto. V12.0', 'success');
         }
-
-        console.log('[SIAP V12] Sidebar criada com sucesso.');
     }
 
     initSidebar();
