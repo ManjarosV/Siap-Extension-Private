@@ -14,6 +14,8 @@ Como você colaborador irá se conectar? Usando Tailscale, mas isso é papo para
 Para realizar os testes instale o (PRECISA DO NOTEBOOK SISTEMA QUE QUISER)
 
 google-chrome = mais recente
+
+
 extensão tampermonkey
 
 
