@@ -1,13 +1,15 @@
 // ==UserScript==
-// @name         SIAP Automator - V8.4.6 (Sem índices nos textos)
+// @name         SIAP Automator - V8.4.6-auth (Original + Autenticação)
 // @namespace    http://tampermonkey.net/
-// @version      8.4.6
-// @description  Automação total com botão Parar. IA não insere índices em metodologia/avaliação.
+// @version      8.4.6-auth
+// @description  V8.4.6 original com fetch substituído por GM_xmlhttpRequest e autenticação.
 // @match        https://siap.educacao.go.gov.br/*
 // @match        https://*.siap.com.br/*
 // @match        https://*.siapnet.com.br/*
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
+// @connect      *
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -17,9 +19,14 @@
     if (window.SiapAutomator && window.SiapAutomator.isInitialized) return;
     window.SiapAutomator = { isInitialized: true };
 
-    const DEFAULT_WEBHOOK = 'http://localhost:5678/webhook/siap-automator';
-    const STORAGE_KEY = 'siap_automator_state';
+    // --- ÚNICA ADIÇÃO: configurações de autenticação ---
+    const SETTINGS_KEY = 'siap_automator_settings';
+    const settings = GM_getValue(SETTINGS_KEY, {
+        webhookUrl: 'http://127.0.0.1:5678/webhook/siap-automator',
+        authToken: 'admingon1'
+    });
 
+    const STORAGE_KEY = 'siap_automator_state';
     let stopRequested = false;
 
     function saveState(data) {
@@ -103,6 +110,7 @@
         return map;
     };
 
+    // Coleta de itens ORIGINAL (sem spans node-wrapper)
     const getItemsFromDoc = (doc) => {
         let items = [];
         const containers = Array.from(doc.querySelectorAll('div[id*="Nodes"]'));
@@ -166,6 +174,30 @@
         if (btn) { await robustClick(btn); logToSidebar('✅ Salvar/Próximo clicado.', 'info'); return true; }
         logToSidebar('⚠️ Botão Salvar/Próximo não encontrado.', 'warn');
         return false;
+    };
+
+    // --- NOVA FUNÇÃO COM GM_xmlhttpRequest (em vez de fetch) ---
+    const callWebhook = (data) => {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: "POST",
+                url: settings.webhookUrl,
+                data: JSON.stringify(data),
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${settings.authToken}`
+                },
+                onload: (res) => {
+                    try {
+                        const json = JSON.parse(res.responseText);
+                        resolve(json);
+                    } catch (e) {
+                        reject(e);
+                    }
+                },
+                onerror: (err) => reject(err)
+            });
+        });
     };
 
     let isRunning = false;
@@ -240,7 +272,6 @@
 
                 const opcoesNumeradas = items.map((it, idx) => `${idx}: ${it.text}`).join('\n');
 
-                // ─── PROMPT CORRIGIDO: NÃO INSERIR ÍNDICES NOS TEXTOS ─────────
                 const prompt = `Você é uma professora brasileira. A aula será aplicada SOMENTE por você, na sala de aula, com recursos simples (lousa, folhas, vídeos, áudios). Nada de convidados ou atividades externas.
 
 Contexto: ${contextInput}
@@ -263,18 +294,16 @@ Responda SOMENTE com JSON:
   "avaliacao": "texto da avaliação (sem índices)"
 }`;
 
+                // --- SUBSTITUIÇÃO DO fetch POR callWebhook ---
                 const payload = { prompt, context: contextInput, options: items.map(it => it.text), stream: false, format: 'json' };
                 logToSidebar(`Enviando ${items.length} itens para a IA...`, 'info');
-                const res = await fetch(DEFAULT_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!res.ok) { logToSidebar(`❌ HTTP ${res.status}`, 'error'); break; }
-                if (stopRequested) break;
-                const raw = await res.json();
                 let parsed;
                 try {
-                    let data = raw?.message?.content ?? raw?.response ?? raw;
-                    if (typeof data === 'string') { const match = data.match(/\{[\s\S]*\}/); data = JSON.parse(match ? match[0] : data); }
-                    parsed = data;
-                } catch(e) { logToSidebar(`❌ JSON inválido: ${e.message}`, 'error'); parsed = null; }
+                    parsed = await callWebhook(payload);
+                } catch(e) {
+                    logToSidebar(`❌ Erro no webhook: ${e.message}`, 'error');
+                    break;
+                }
                 if (stopRequested) break;
 
                 const validation = validateAIResponse(parsed, items.length-1);
@@ -348,7 +377,10 @@ Responda SOMENTE com JSON:
         const resumeHint = saved.currentAula ? ` (retomar aula ${saved.currentAula})` : '';
         document.body.insertAdjacentHTML('beforeend', `
             <div id="siap-sidebar" style="position:fixed; top:0; right:0; width:300px; height:100vh; background:#1a1a2e; color:#eee; border-left:4px solid #0056b3; z-index:100000; display:flex; flex-direction:column; font-family:'Segoe UI',sans-serif; box-shadow:-5px 0 20px rgba(0,0,0,0.5);">
-                <div style="background:#0056b3; padding:14px; font-weight:bold;">🤖 SIAP Automator V8.4.6</div>
+                <div style="background:#0056b3; padding:14px; font-weight:bold; display:flex; justify-content:space-between;">
+                    <span>🤖 SIAP Automator V8.4.6-auth</span>
+                    <button id="siap-config" style="background:none; border:none; color:white; cursor:pointer;">⚙️</button>
+                </div>
                 <div style="padding:14px; flex:1; display:flex; flex-direction:column; gap:8px;">
                     <label style="font-size:12px; color:#aaa;">📝 Contexto</label>
                     <textarea id="siap-context" rows="3" placeholder="Ex: Aula de Artes Visuais" style="width:100%; padding:8px; background:#0d0d1a; color:#eee; border:1px solid #444; border-radius:5px; resize:none;">${saved.context || ''}</textarea>
@@ -366,7 +398,16 @@ Responda SOMENTE com JSON:
         `);
         document.getElementById('siap-start').addEventListener('click', () => runAutomation(false));
         document.getElementById('siap-stop').addEventListener('click', stopAutomation);
-
+        document.getElementById('siap-config').addEventListener('click', () => {
+            const url = prompt("URL do webhook:", settings.webhookUrl);
+            const token = prompt("Token:", settings.authToken);
+            if (url && token) {
+                settings.webhookUrl = url;
+                settings.authToken = token;
+                GM_setValue(SETTINGS_KEY, settings);
+                location.reload();
+            }
+        });
         if (saved.currentAula && saved.totalAulas && saved.currentAula <= saved.totalAulas) {
             logToSidebar(`Progresso detectado: aula ${saved.currentAula} de ${saved.totalAulas}. Iniciando automaticamente...`, 'info');
             setTimeout(() => runAutomation(true), 2000);
