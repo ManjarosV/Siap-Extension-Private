@@ -33,5 +33,6 @@ acesse a url http://100.64.233.112:5678/workflow/ e logo depois logue usando meu
 user: gustavosousaoliveiracup@gmail.com
 pass: 220Marilene#
 
-
+Webhhook usada para meus testes: http://127.0.0.1:5678/webhook/siap-automator
+token: admingon1
 
