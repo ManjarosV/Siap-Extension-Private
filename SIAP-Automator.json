@@ -45,7 +45,7 @@
     var SETTINGS_KEY = 'siap_automator_settings';
     var settings = GM_getValue(SETTINGS_KEY, {
         webhookUrl: 'https://pc-do-gon.tailaa9b6a.ts.net/webhook/siap-automator',
-        authToken: 'admingon1'
+        authToken: ''
     });
     // Compartilha token via localStorage para o script companheiro ler
     try { localStorage.setItem('siap_token', settings.authToken); } catch(_) {}
