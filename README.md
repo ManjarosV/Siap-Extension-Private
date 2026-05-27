@@ -13,10 +13,14 @@ Como você colaborador irá se conectar? Usando Tailscale, mas isso é papo para
 
 Para realizar os testes instale o (PRECISA DO NOTEBOOK SISTEMA QUE QUISER)
 
+
+
 google-chrome = mais recente
 
 
 extensão tampermonkey
+
+Só apertar em criar script e colar o script anexado no git (nao é o workflow)
 
 
 Como vai fazer os testes? você vai usar o poder da minha maquina via wifi hihihi olha ai
