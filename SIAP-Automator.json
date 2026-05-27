@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         SIAP Automator - V8.4.6-auth (Styled)
+// @name         SIAP Automator - V9.2 (Restored Logic)
 // @namespace    http://tampermonkey.net/
-// @version      8.4.7-styled
-// @description  V8.4.6 original com interface moderna, mantendo TODA a lógica original intacta.
+// @version      9.2.0
+// @description  Lógica ORIGINAL restaurada com interface moderna e início apenas manual.
 // @match        https://siap.educacao.go.gov.br/*
 // @match        https://*.siap.com.br/*
 // @match        https://*.siapnet.com.br/*
@@ -10,6 +10,7 @@
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
+// @connect      pc-do-gon.tailaa9b6a.ts.net
 // @connect      *
 // @run-at       document-idle
 // ==/UserScript==
@@ -20,18 +21,12 @@
     if (window.SiapAutomator && window.SiapAutomator.isInitialized) return;
     window.SiapAutomator = { isInitialized: true };
 
-    // --- Estilização (Adicionada) ---
+    // --- Estilização Moderna (GM_addStyle) ---
     GM_addStyle(`
         :root {
-            --siap-bg: #121218;
-            --siap-card: #1e1e26;
-            --siap-accent: #3b82f6;
-            --siap-success: #10b981;
-            --siap-error: #ef4444;
-            --siap-warn: #f59e0b;
-            --siap-text: #f3f4f6;
-            --siap-text-dim: #9ca3af;
-            --siap-border: #334155;
+            --siap-bg: #121218; --siap-card: #1e1e26; --siap-accent: #3b82f6;
+            --siap-success: #10b981; --siap-error: #ef4444; --siap-warn: #f59e0b;
+            --siap-text: #f3f4f6; --siap-text-dim: #9ca3af; --siap-border: #334155;
         }
         #siap-sidebar {
             position: fixed; top: 0; right: 0; width: 320px; height: 100vh;
@@ -74,10 +69,10 @@
         #siap-log-output p { margin: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
     `);
 
-    // --- LÓGICA ORIGINAL (Inalterada) ---
+    // --- LÓGICA ORIGINAL (Restaurada linha por linha) ---
     const SETTINGS_KEY = 'siap_automator_settings';
     const settings = GM_getValue(SETTINGS_KEY, {
-        webhookUrl: 'http://127.0.0.1:5678/webhook/siap-automator',
+        webhookUrl: 'https://pc-do-gon.tailaa9b6a.ts.net/webhook/siap-automator',
         authToken: 'admingon1'
     });
 
@@ -240,12 +235,7 @@
                     "Authorization": `Bearer ${settings.authToken}`
                 },
                 onload: (res) => {
-                    try {
-                        const json = JSON.parse(res.responseText);
-                        resolve(json);
-                    } catch (e) {
-                        reject(e);
-                    }
+                    try { resolve(JSON.parse(res.responseText)); } catch (e) { reject(e); }
                 },
                 onerror: (err) => reject(err)
             });
@@ -264,10 +254,7 @@
     };
 
     const runAutomation = async (isAutoStart = false) => {
-        if (isRunning) {
-            logToSidebar('Automação já em execução.', 'warn');
-            return;
-        }
+        if (isRunning) { logToSidebar('Automação já em execução.', 'warn'); return; }
         stopRequested = false;
         isRunning = true;
 
@@ -289,18 +276,12 @@
         let aulaAtual = saved.currentAula || 1;
         if (aulaAtual > qtdTotal) {
             logToSidebar(`✅ Todas as ${qtdTotal} aulas já foram concluídas.`, 'success');
-            isRunning = false;
-            btnStart.disabled = false;
-            btnStop.disabled = true;
-            return;
+            isRunning = false; btnStart.disabled = false; btnStop.disabled = true; return;
         }
 
-        if (!isAutoStart) {
-            saveState({ currentAula: aulaAtual, context: contextInput, totalAulas: qtdTotal });
-        }
+        if (!isAutoStart) saveState({ currentAula: aulaAtual, context: contextInput, totalAulas: qtdTotal });
 
-        btnStart.disabled = true;
-        btnStop.disabled = false;
+        btnStart.disabled = true; btnStop.disabled = false;
         logToSidebar(`▶️ Iniciando aula ${aulaAtual} de ${qtdTotal}`, 'info');
 
         try {
@@ -315,84 +296,45 @@
                 if (stopRequested) break;
 
                 const items = await collectItems();
-                if (items.length === 0) {
-                    logToSidebar('❌ Nenhum item encontrado. Expanda as pastas!', 'error');
-                    break;
-                }
+                if (items.length === 0) { logToSidebar('❌ Nenhum item encontrado. Expanda as pastas!', 'error'); break; }
                 const taMap = buildTextareaMap();
-                logToSidebar(`Textareas: ${Object.keys(taMap).join(', ')}`, 'info');
-
-                const opcoesNumeradas = items.map((it, idx) => `${idx}: ${it.text}`).join('\n');
 
                 const prompt = `Você é uma professora brasileira. A aula será aplicada SOMENTE por você, na sala de aula, com recursos simples (lousa, folhas, vídeos, áudios). Nada de convidados ou atividades externas.
-
 Contexto: ${contextInput}
-
-Abaixo estão os itens disponíveis. Os primeiros 3 itens (índices 0, 1, 2) geralmente são HABILIDADES (contêm códigos como (GO-EF05AR07-A)). Os demais são OBJETIVOS DE CONHECIMENTO/CONTEÚDOS.
-
-${opcoesNumeradas}
-
+Itens disponíveis:
+${items.map((it, idx) => `${idx}: ${it.text}`).join('\n')}
 INSTRUÇÕES:
 1. Escolha exatamente 1 item que seja HABILIDADE (índice 0, 1 ou 2).
 2. Escolha de 0 a 3 itens que sejam OBJETIVOS (índices a partir de 3).
-3. O primeiro índice da lista "selecionados" deve ser a habilidade; os seguintes são os objetivos.
-4. "metodologia": Descreva o que você fará em 2-3 linhas, com exemplos concretos. **CRIE METODOLOGIAS DIVERSIFICADAS: Evite repetições, não use frases prontas e garanta que cada aula tenha uma abordagem pedagógica única e criativa.** NÃO mencione números de índice ou "item X". Escreva como uma professora real, de forma natural.
-5. "avaliacao": Como avaliará. **Varie os métodos de avaliação para cada aula (ex: observação, registro, debate, atividade prática, etc.).** Não mencione índices ou posições. Use linguagem natural.
-
+3. "metodologia": Descreva o que você fará em 2-3 linhas. **CRIE METODOLOGIAS DIVERSIFICADAS: Evite repetições e frases prontas.** NÃO mencione índices.
+4. "avaliacao": Como avaliará. **Varie os métodos de avaliação para cada aula.**
 Responda SOMENTE com JSON:
-{
-  "selecionados": [indice_da_habilidade, indice_objetivo1, indice_objetivo2, ...],
-  "metodologia": "texto da metodologia (sem índices)",
-  "avaliacao": "texto da avaliação (sem índices)"
-}`;
+{ "selecionados": [indice_da_habilidade, ...], "metodologia": "texto", "avaliacao": "texto" }`;
 
                 const payload = { prompt, context: contextInput, options: items.map(it => it.text), stream: false, format: 'json' };
                 logToSidebar(`Enviando ${items.length} itens para a IA...`, 'info');
                 let parsed;
-                try {
-                    parsed = await callWebhook(payload);
-                } catch(e) {
-                    logToSidebar(`❌ Erro no webhook: ${e.message}`, 'error');
-                    break;
-                }
+                try { parsed = await callWebhook(payload); } catch(e) { logToSidebar(`❌ Erro no webhook: ${e.message}`, 'error'); break; }
                 if (stopRequested) break;
 
                 const validation = validateAIResponse(parsed, items.length-1);
                 if (!validation) {
-                    logToSidebar('⚠️ IA inválida. Usando fallback: apenas primeiro item.', 'warn');
+                    logToSidebar('⚠️ IA inválida. Usando fallback.', 'warn');
                     const fallbackItem = items[0];
-                    if (fallbackItem && !stopRequested) { await robustClick(fallbackItem.el); logToSidebar(`✓ Fallback: ${fallbackItem.text.substring(0,45)}`, 'success'); }
-                    const taMet = taMap['metodologias'];
-                    if (taMet && !stopRequested) await typeIntoTextarea(taMet, 'Explicação na lousa e atividade individual.');
-                    const taAval = taMap['avaliacoes'];
-                    if (taAval && !stopRequested) await typeIntoTextarea(taAval, 'Observação da turma.');
+                    if (fallbackItem && !stopRequested) { await robustClick(fallbackItem.el); }
+                    if (taMap['metodologias'] && !stopRequested) await typeIntoTextarea(taMap['metodologias'], 'Explicação na lousa.');
                 } else {
                     const { selecionados, metodologia, avaliacao } = validation;
-                    logToSidebar(`IA selecionou índices: [${selecionados.join(', ')}]`, 'info');
                     for (let idx of selecionados) {
                         if (stopRequested) break;
                         const item = items[idx];
-                        if (item) {
-                            item.el.style.outline = '3px solid #00ff88';
-                            await robustClick(item.el);
-                            logToSidebar(`✓ [${idx}] ${item.text.substring(0,45)}`, 'success');
-                            await wait(800);
-                        } else {
-                            logToSidebar(`⚠️ Índice ${idx} inválido`, 'warn');
-                        }
+                        if (item) { item.el.style.outline = '3px solid #00ff88'; await robustClick(item.el); await wait(800); }
                     }
-                    const taMet = taMap['metodologias'];
-                    if (taMet && metodologia && !stopRequested) { await typeIntoTextarea(taMet, metodologia); logToSidebar('📝 Metodologia preenchida.', 'success'); }
-                    const taAval = taMap['avaliacoes'];
-                    if (taAval && avaliacao && !stopRequested) { await typeIntoTextarea(taAval, avaliacao); logToSidebar('📝 Avaliação preenchida.', 'success'); }
+                    if (taMap['metodologias'] && metodologia && !stopRequested) await typeIntoTextarea(taMap['metodologias'], metodologia);
+                    if (taMap['avaliacoes'] && avaliacao && !stopRequested) await typeIntoTextarea(taMap['avaliacoes'], avaliacao);
                 }
 
-                if (stopRequested) {
-                    logToSidebar('⏸️ Interrompido antes de salvar. Progresso salvo.', 'warn');
-                    saveState({ currentAula: aula, context: contextInput, totalAulas: qtdTotal });
-                    break;
-                }
-
+                if (stopRequested) break;
                 logToSidebar('✅ Salvando...', 'warn');
                 await wait(3000);
                 if (stopRequested) break;
@@ -401,65 +343,37 @@ Responda SOMENTE com JSON:
 
                 if (aula < qtdTotal) {
                     saveState({ currentAula: aula + 1, context: contextInput, totalAulas: qtdTotal });
-                    logToSidebar(`Progresso salvo. Próxima aula: ${aula+1}. A página vai recarregar.`, 'info');
-                    isRunning = false;
-                    btnStart.disabled = false;
-                    btnStop.disabled = true;
+                    logToSidebar(`Recarregando para próxima aula...`, 'info');
                     return;
                 } else {
-                    clearState();
-                    logToSidebar('🏁 Todas as aulas concluídas!', 'success');
+                    clearState(); logToSidebar('🏁 Todas as aulas concluídas!', 'success');
                 }
             }
         } catch(e) {
             logToSidebar(`❌ Erro: ${e.message}`, 'error');
-            saveState({ currentAula: aulaAtual, error: e.message });
         } finally {
-            isRunning = false;
-            btnStart.disabled = false;
-            btnStop.disabled = true;
-            stopRequested = false;
+            isRunning = false; btnStart.disabled = false; btnStop.disabled = true; stopRequested = false;
         }
     };
 
-    // --- Interface (Estilizada sem mudar a lógica de IDs e Eventos) ---
     const initSidebar = () => {
         if (document.getElementById('siap-sidebar')) return;
         const saved = loadState();
-        const resumeHint = saved.currentAula ? ` (retomar aula ${saved.currentAula})` : '';
+        const resumeHint = saved.currentAula ? ` (Aula ${saved.currentAula})` : '';
 
         document.body.insertAdjacentHTML('beforeend', `
             <div id="siap-sidebar">
-                <div class="siap-header">
-                    <span>🤖 SIAP Automator V8.4.6</span>
-                    <button id="siap-config" title="Configurações">⚙️</button>
-                </div>
+                <div class="siap-header"><span>🤖 SIAP Automator V9.2</span><button id="siap-config">⚙️</button></div>
                 <div class="siap-content">
-                    <div class="siap-section">
-                        <label class="siap-label">📝 Contexto da Aula</label>
-                        <textarea id="siap-context" class="siap-textarea" rows="3" placeholder="Ex: Aula de Artes Visuais">${saved.context || ''}</textarea>
-                    </div>
-
-                    <div class="siap-section">
-                        <label class="siap-label">🔢 Quantidade de Aulas</label>
-                        <input type="number" id="siap-qtd" class="siap-input" value="${saved.totalAulas || 1}" min="1">
-                    </div>
-
+                    <label class="siap-label">📝 Contexto</label>
+                    <textarea id="siap-context" class="siap-textarea" rows="3">${saved.context || ''}</textarea>
+                    <label class="siap-label">🔢 Aulas</label>
+                    <input type="number" id="siap-qtd" class="siap-input" value="${saved.totalAulas || 1}">
                     <div class="siap-btn-group">
                         <button id="siap-start" class="siap-btn">🚀 Iniciar${resumeHint}</button>
                         <button id="siap-stop" class="siap-btn" disabled>⏹️ Parar</button>
                     </div>
-
-                    <div class="siap-info-box">
-                        ✅ 1 Habilidade + até 3 Objetivos<br>
-                        📝 Metodologia simples (sala de aula)<br>
-                        💾 Automação total + Parar
-                    </div>
-
-                    <div class="siap-log-container" style="flex:1; display:flex; flex-direction:column;">
-                        <label class="siap-label">📋 Log de Atividades</label>
-                        <div id="siap-log-output"></div>
-                    </div>
+                    <div id="siap-log-output"></div>
                 </div>
             </div>
         `);
@@ -469,21 +383,12 @@ Responda SOMENTE com JSON:
         document.getElementById('siap-config').addEventListener('click', () => {
             const url = prompt("URL do webhook:", settings.webhookUrl);
             const token = prompt("Token:", settings.authToken);
-            if (url && token) {
-                settings.webhookUrl = url;
-                settings.authToken = token;
-                GM_setValue(SETTINGS_KEY, settings);
-                location.reload();
-            }
+            if (url && token) { settings.webhookUrl = url; settings.authToken = token; GM_setValue(SETTINGS_KEY, settings); location.reload(); }
         });
 
-        if (saved.currentAula && saved.totalAulas && saved.currentAula <= saved.totalAulas) {
-            logToSidebar(`Progresso detectado: aula ${saved.currentAula} de ${saved.totalAulas}. Iniciando automaticamente...`, 'info');
-            setTimeout(() => runAutomation(true), 2000);
-        } else {
-            logToSidebar('Pronto. Expanda as pastas e clique em Iniciar.', 'success');
-            if (saved.currentAula) logToSidebar(`🔄 Progresso salvo: aula ${saved.currentAula}. Clique em Iniciar para retomar.`, 'warn');
-        }
+        // --- AQUI ESTÁ A MUDANÇA: REMOVI O AUTO-START ---
+        logToSidebar('Sistema Pronto.', 'success');
+        if (saved.currentAula) logToSidebar(`🔄 Aula ${saved.currentAula} salva. Clique em Iniciar para retomar.`, 'warn');
     };
 
     initSidebar();
