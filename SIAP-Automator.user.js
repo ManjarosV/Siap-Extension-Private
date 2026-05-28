@@ -3,8 +3,8 @@
 // @namespace    http://tampermonkey.net/
 // @version      12.0.5
 // @description  Dois passos: seleciona itens e depois gera texto coeso com a habilidade.
-// @updateURL    https://siap-automator.user.js
-// @downloadURL  https://siap-automator.user.js
+// @updateURL    https://github.com/ManjarosV/Siap-Extension-Private/raw/refs/heads/main/SIAP-Automator.user.js
+// @downloadURL  https://github.com/ManjarosV/Siap-Extension-Private/raw/refs/heads/main/SIAP-Automator.user.js
 // @match        https://siap.educacao.go.gov.br/*
 // @match        https://*.siap.com.br/*
 // @match        https://*.siapnet.com.br/*
