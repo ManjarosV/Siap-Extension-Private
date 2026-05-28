@@ -3,6 +3,8 @@
 // @namespace    http://tampermonkey.net/
 // @version      12.0.0
 // @description  Dois passos: seleciona itens e depois gera texto coeso com a habilidade.
+// @updateURL    https://vercel.app
+// @downloadURL  https://vercel.app
 // @match        https://siap.educacao.go.gov.br/*
 // @match        https://*.siap.com.br/*
 // @match        https://*.siapnet.com.br/*
