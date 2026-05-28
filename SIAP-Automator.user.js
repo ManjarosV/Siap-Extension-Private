@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SIAP Automator - V12.0 (Two-Step Logic)
 // @namespace    http://tampermonkey.net/
-// @version      12.0.2
+// @version      12.1.0
 // @description  Dois passos: seleciona itens e depois gera texto coeso com a habilidade.
 // @updateURL    https://github.com/ManjarosV/Siap-Extension-Private/raw/refs/heads/main/SIAP-Automator.user.js
 // @downloadURL  https://github.com/ManjarosV/Siap-Extension-Private/raw/refs/heads/main/SIAP-Automator.user.js
